@@ -1,5 +1,7 @@
 package com.example.cache.configuration;
 
+import com.example.cache.cluster.ConsistentHashClusterService;
+import com.example.cache.cluster.IClusterService;
 import com.example.cache.core.DistributedCacheImpl;
 import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.ds.CacheQueue;
@@ -48,8 +50,22 @@ public class SystemConfig {
     }
 
     @Bean
-    public DistributedCacheImpl<String, String> distributedCache() {
-        return new DistributedCacheImpl<>(cacheMap(), cacheQueue(), cacheMetrics());
+    public IClusterService<String> clusterService(
+            @Value("${cluster.node.id:node-1}") String localNodeId,
+            @Value("${cluster.virtual.nodes:10}") int virtualNodesPerNode,
+            @Value("${cluster.initial.nodes:node-1,node-2,node-3}") String initialNodeCsv
+    ) {
+        ConsistentHashClusterService<String> clusterService = new ConsistentHashClusterService<>(localNodeId, virtualNodesPerNode);
+        String[] nodes = initialNodeCsv.split(",");
+        for (String node : nodes) {
+            clusterService.addNode(node.trim());
+        }
+        return clusterService;
+    }
+
+    @Bean
+    public DistributedCacheImpl<String, String> distributedCache(IClusterService<String> clusterService) {
+        return new DistributedCacheImpl<>(cacheMap(), cacheQueue(), cacheMetrics(), clusterService);
     }
 
     @Bean

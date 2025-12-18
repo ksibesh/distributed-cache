@@ -93,6 +93,7 @@
                     <excludes>
                         <exclude>com/example/cache/configuration/**</exclude>
                         <exclude>com/example/cache/DistributedCacheApplication.class</exclude>
+                        <exclude>com/example/cache/task/CacheCleanerTaskInitializer.class</exclude>
                         <exclude>com/example/cache/metrics/**</exclude>
                     </excludes>
                 </configuration>

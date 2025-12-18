@@ -8,6 +8,4 @@ public interface IDistributedCache<K, V> {
 
     void delete(K key);
 
-    int size();
-
 }

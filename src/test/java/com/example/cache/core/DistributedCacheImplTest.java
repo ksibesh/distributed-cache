@@ -1,112 +1,208 @@
 package com.example.cache.core;
 
+import com.example.cache.cluster.IClusterService;
 import com.example.cache.core.domain.CacheEntry;
+import com.example.cache.core.domain.CacheOperation;
+import com.example.cache.core.domain.CacheOperationType;
 import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.metrics.CacheMetrics;
-import org.junit.jupiter.api.Assertions;
+import com.example.cache.util.SystemUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@SuppressWarnings("unchecked")
 public class DistributedCacheImplTest {
+
+    ConcurrentHashMap<String, CacheEntry<String>> cacheMap;
+    private CacheMetrics cacheMetrics;
+    private CacheQueue<String> queue;
+    private IClusterService<String> clusterService;
 
     private IDistributedCache<String, String> cache;
 
+    private final String KEY = "test_key";
+    private final String VALUE = "test_value";
+    private final long TTL_IN_SEC = 60;
+    private final String LOCAL_NODE_ID = "local-node-1";
+
     @BeforeEach
     public void setup() {
-        ConcurrentHashMap<String, CacheEntry<String>> cacheMap = new ConcurrentHashMap<>();
-        CacheMetrics cacheMetrics = new CacheMetrics();
-        CacheQueue<String> queue = new CacheQueue<>(10, cacheMetrics);
-        cache = new DistributedCacheImpl<>(cacheMap, queue, cacheMetrics);
+        cacheMap = mock(ConcurrentHashMap.class);
+        cacheMetrics = mock(CacheMetrics.class);
+        queue = (CacheQueue<String>) mock(CacheQueue.class);
+        clusterService = (IClusterService<String>) mock(IClusterService.class);
+
+        cache = new DistributedCacheImpl<>(cacheMap, queue, cacheMetrics, clusterService);
+    }
+
+    private void mockForOwnerNode() {
+        when(clusterService.findOwnerNode(KEY)).thenReturn(LOCAL_NODE_ID);
+        when(clusterService.getLocalNodeId()).thenReturn(LOCAL_NODE_ID);
+    }
+
+    private void mockForNonOwnerNode() {
+        when(clusterService.findOwnerNode(KEY)).thenReturn("node-2");
+        when(clusterService.getLocalNodeId()).thenReturn(LOCAL_NODE_ID);
     }
 
     @Test
     public void testPut() {
-        String key = "test_key";
-        String value = "test_value";
-        long ttlInSec = 60;
+        mockForOwnerNode();
 
-        cache.put(key, value, ttlInSec);
-        Assertions.assertEquals(1, cache.size());
-        Assertions.assertEquals(value, cache.get(key));
-        Assertions.assertNull(cache.get("random_key"));
+        ArgumentCaptor<CacheEntry<String>> cacheEntryCaptor = ArgumentCaptor.forClass(CacheEntry.class);
+        ArgumentCaptor<CacheOperation<String>> cacheOperationCaptor = ArgumentCaptor.forClass(CacheOperation.class);
+
+        cache.put(KEY, VALUE, TTL_IN_SEC);
+
+        verify(cacheMap, times(1)).put(eq(KEY), cacheEntryCaptor.capture());
+        verify(queue, times(1)).submit(cacheOperationCaptor.capture());
+
+        CacheEntry<String> cacheEntry = cacheEntryCaptor.getValue();
+        CacheOperation<String> cacheOperation = cacheOperationCaptor.getValue();
+
+        assertEquals(VALUE, cacheEntry.getValue());
+        assertEquals(CacheOperationType.PUT, cacheOperation.getType());
+        assertEquals(KEY, cacheOperation.getKey());
+    }
+
+    @Test
+    public void testPutWhenNotOwner() {
+        mockForNonOwnerNode();
+
+        cache.put(KEY, VALUE, TTL_IN_SEC);
+
+        verify(queue, never()).submit(any(CacheOperation.class));
+        verify(cacheMap, never()).put(eq(KEY), any(CacheEntry.class));
     }
 
     @Test
     public void testPutWithNullKey() {
-        String key = null;
-        String value = "test_value";
-        long ttlInSec = 60;
-
-        Assertions.assertThrows(IllegalArgumentException.class, () -> {
-            cache.put(key, value, ttlInSec);
+        assertThrows(IllegalArgumentException.class, () -> {
+            cache.put(null, VALUE, TTL_IN_SEC);
         });
     }
 
     @Test
     public void testPutWithNullValue() {
-        String key = "test_key";
-        String value = null;
-        long ttlInSec = 60;
-
-        Assertions.assertThrows(IllegalArgumentException.class, () -> {
-            cache.put(key, value, ttlInSec);
+        assertThrows(IllegalArgumentException.class, () -> {
+            cache.put(KEY, null, TTL_IN_SEC);
         });
     }
 
     @Test
     public void testGet() {
-        String key = "test_key";
-        String value = "test_value";
-        long ttlInSec = 60;
+        long currentTimeInSec = SystemUtil.getCurrentTimeInSec();
+        long expirationTime = currentTimeInSec + TTL_IN_SEC;
 
-        cache.put(key, value, ttlInSec);
-        String returnedValue = cache.get(key);
+        mockForOwnerNode();
 
-        Assertions.assertEquals(value, returnedValue);
+        CacheEntry<String> entry = CacheEntry.<String>builder()
+                .value(VALUE)
+                .expirationTime(expirationTime)
+                .build();
+        when(cacheMap.get(KEY)).thenReturn(entry);
+
+        ArgumentCaptor<CacheOperation<String>> operationCaptor = ArgumentCaptor.forClass(CacheOperation.class);
+
+        String returnedValue = cache.get(KEY);
+
+        assertEquals(VALUE, returnedValue);
+        verify(cacheMap, times(1)).get(KEY);
+        verify(queue, times(1)).submit(operationCaptor.capture());
+
+        CacheOperation<String> submittedOperation = operationCaptor.getValue();
+        assertEquals(CacheOperationType.ACCESS, submittedOperation.getType());
+        assertEquals(KEY, submittedOperation.getKey());
     }
 
     @Test
-    public void testGetAfterTtl() throws InterruptedException {
-        String key = "test_key";
-        String value = "test_value";
-        long ttlInSec = 2;
+    public void testGetAfterTtl() {
+        long currentTimeInSec = SystemUtil.getCurrentTimeInSec();
+        long expirationTimeInSec = currentTimeInSec - TTL_IN_SEC;
 
-        cache.put(key, value, ttlInSec);
-        Thread.sleep(ttlInSec * 1000);
+        try (MockedStatic<SystemUtil> mockedSystemUtil = mockStatic(SystemUtil.class)) {
+            mockedSystemUtil.when(SystemUtil::getCurrentTimeInSec).thenReturn(currentTimeInSec);
 
-        String returnedValue = cache.get(key);
-        Assertions.assertNull(returnedValue);
-        Assertions.assertEquals(0, cache.size());
+            mockForOwnerNode();
+
+            CacheEntry<String> cacheEntry = CacheEntry.<String>builder()
+                    .value(VALUE)
+                    .expirationTime(expirationTimeInSec)
+                    .build();
+            when(cacheMap.get(KEY)).thenReturn(cacheEntry);
+
+            String returnedValue = cache.get(KEY);
+
+            ArgumentCaptor<CacheOperation<String>> cacheOperationCaptor = ArgumentCaptor.forClass(CacheOperation.class);
+
+            verify(cacheMap, times(1)).remove(KEY);
+            verify(queue, times(1)).submit(cacheOperationCaptor.capture());
+
+            CacheOperation<String> cacheOperation = cacheOperationCaptor.getValue();
+
+            assertNull(returnedValue);
+            assertEquals(CacheOperationType.REMOVE, cacheOperation.getType());
+            assertEquals(KEY, cacheOperation.getKey());
+        }
     }
 
     @Test
     public void testGetWithNullKey() {
-        String key = null;
-        Assertions.assertThrows(IllegalArgumentException.class, () -> {
-            cache.get(key);
+        assertThrows(IllegalArgumentException.class, () -> {
+            cache.get(null);
         });
     }
 
     @Test
+    public void testGetForCacheMiss() {
+        mockForOwnerNode();
+        when(cacheMap.get(KEY)).thenReturn(null);
+
+        cache.get(KEY);
+
+        verify(cacheMap, times(1)).get(KEY);
+        verify(queue, never()).submit(any(CacheOperation.class));
+        verify(cacheMetrics, times(1)).incrementMisses();
+    }
+
+    @Test
+    public void testGetWhenNotOwner() {
+        mockForNonOwnerNode();
+
+        cache.get(KEY);
+
+        verify(cacheMap, never()).get(KEY);
+        verify(queue, never()).submit(any(CacheOperation.class));
+    }
+
+    @Test
     public void testDelete() {
-        String key = "test_key";
-        String value = "test_value";
-        long ttlInSec = 2;
+        mockForOwnerNode();
+        when(cacheMap.containsKey(KEY)).thenReturn(true);
 
-        cache.put(key, value, ttlInSec);
-        Assertions.assertEquals(1, cache.size());
+        cache.delete(KEY);
 
-        cache.delete(key);
-        Assertions.assertEquals(0, cache.size());
+        ArgumentCaptor<CacheOperation<String>> cacheOperationCaptor = ArgumentCaptor.forClass(CacheOperation.class);
+
+        verify(cacheMetrics, times(1)).incrementRemoves();
+        verify(cacheMap, times(1)).remove(KEY);
+        verify(queue, times(1)).submit(cacheOperationCaptor.capture());
+
+        CacheOperation<String> cacheOperation = cacheOperationCaptor.getValue();
+        assertEquals(CacheOperationType.REMOVE, cacheOperation.getType());
+        assertEquals(KEY, cacheOperation.getKey());
     }
 
     @Test
     public void testDeleteWithNullKey() {
-        String key = null;
-
-        Assertions.assertThrows(IllegalArgumentException.class, () -> cache.delete(key));
+        assertThrows(IllegalArgumentException.class, () -> cache.delete(null));
     }
 
     /**
@@ -118,26 +214,30 @@ public class DistributedCacheImplTest {
      */
     @Test
     public void testDeleteWithNonExistingKey() {
-        String key = "test_key";
-        String value = "test_value";
-        long ttlInSec = 2;
+        mockForOwnerNode();
+        when(cacheMap.containsKey(KEY)).thenReturn(false);
 
-        cache.put(key, value, ttlInSec);
-        Assertions.assertEquals(1, cache.size());
+        cache.delete(KEY);
 
-        String nonExistingKey = "test_key_v2";
-        cache.delete(nonExistingKey);
-        Assertions.assertEquals(1, cache.size());
+        ArgumentCaptor<CacheOperation<String>> cacheOperationCaptor = ArgumentCaptor.forClass(CacheOperation.class);
+
+        verify(cacheMetrics, never()).incrementRemoves();
+        verify(cacheMap, times(1)).remove(KEY);
+        verify(queue, times(1)).submit(cacheOperationCaptor.capture());
+
+        CacheOperation<String> cacheOperation = cacheOperationCaptor.getValue();
+        assertEquals(CacheOperationType.REMOVE, cacheOperation.getType());
+        assertEquals(KEY, cacheOperation.getKey());
     }
 
     @Test
-    public void testSize() {
-        Assertions.assertEquals(0, cache.size());
+    public void testDeleteWhenNotOwner() {
+        mockForNonOwnerNode();
 
-        String key = "test_key";
-        String value = "test_value";
-        long ttlInSec = 2;
-        cache.put(key, value, ttlInSec);
-        Assertions.assertEquals(1, cache.size());
+        cache.delete(KEY);
+
+        verify(cacheMetrics, never()).incrementRemoves();
+        verify(cacheMap, never()).remove(KEY);
+        verify(queue, never()).submit(any(CacheOperation.class));
     }
 }

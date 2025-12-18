@@ -1,5 +1,6 @@
 package com.example.cache.core;
 
+import com.example.cache.cluster.IClusterService;
 import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.domain.CacheOperation;
 import com.example.cache.core.domain.CacheOperationType;
@@ -16,11 +17,27 @@ public class DistributedCacheImpl<K, V> implements IDistributedCache<K, V> {
     private final Map<K, CacheEntry<V>> cache;
     private final CacheQueue<K> queue;
     private final CacheMetrics cacheMetrics;
+    private final IClusterService<K> clusterService;
 
-    public DistributedCacheImpl(ConcurrentHashMap<K, CacheEntry<V>> cacheMap, CacheQueue<K> queue, CacheMetrics cacheMetrics) {
+    public DistributedCacheImpl(ConcurrentHashMap<K, CacheEntry<V>> cacheMap, CacheQueue<K> queue,
+                                CacheMetrics cacheMetrics, IClusterService<K> clusterService) {
         this.cache = cacheMap;
         this.queue = queue;
         this.cacheMetrics = cacheMetrics;
+        this.clusterService = clusterService;
+
+        log.info("[Cache.Initialized] [Node={}]", clusterService.getLocalNodeId());
+    }
+
+    private boolean isOwnerNode(K key) {
+        String ownerId = clusterService.findOwnerNode(key);
+        boolean isOwner = ownerId.equals(clusterService.getLocalNodeId());
+
+        if (!isOwner) {
+            log.warn("[Cluster.Routing:Cache.Node.NotOwner] [Key={}] [Key Owner Node={}] [Local Node={}]",
+                    key, ownerId, clusterService.getAllNodeIds());
+        }
+        return isOwner;
     }
 
     @Override
@@ -31,6 +48,11 @@ public class DistributedCacheImpl<K, V> implements IDistributedCache<K, V> {
             throw new IllegalArgumentException("Key or Value cannot be null. " +
                     "Try using 'delete' method if your want to delete the key.");
         }
+
+        if (!isOwnerNode(key)) {
+            return;
+        }
+
         long currentTimeInSec = SystemUtil.getCurrentTimeInSec();
         long expirationTimeInSec = currentTimeInSec + ttlSeconds;
 
@@ -50,6 +72,10 @@ public class DistributedCacheImpl<K, V> implements IDistributedCache<K, V> {
         if (null == key) {
             log.error("[Invalid Input:Cache.GET] [key={}]", key);
             throw new IllegalArgumentException("Key cannot be null.");
+        }
+
+        if (!isOwnerNode(key)) {
+            return null;
         }
 
         CacheEntry<V> entry = this.cache.get(key);
@@ -81,18 +107,16 @@ public class DistributedCacheImpl<K, V> implements IDistributedCache<K, V> {
             log.error("[Invalid Input:Cache.DELETE] [key={}]", key);
             throw new IllegalArgumentException("Key cannot be null.");
         }
-        if(this.cache.containsKey(key)) {
+
+        if (!isOwnerNode(key)) {
+            return;
+        }
+
+        if (this.cache.containsKey(key)) {
             this.cacheMetrics.incrementRemoves();
         }
         this.cache.remove(key);
         log.error("[Cache.DELETE] [key={}]", key);
         this.queue.submit(CacheOperation.of(CacheOperationType.REMOVE, key));
-    }
-
-    @Override
-    public int size() {
-        int size = this.cache.size();
-        log.debug("[Cache.Size] [size={}]", size);
-        return size;
     }
 }
