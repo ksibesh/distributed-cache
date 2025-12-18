@@ -3,12 +3,14 @@ package com.example.cache.eviction;
 import com.example.cache.eviction.domain.LeastFrequentlyUsedMetadata;
 import com.example.cache.eviction.ds.DoublyLinkedList;
 import com.example.cache.eviction.ds.domain.Node;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 public class LeastFrequentlyUsedStrategy<K> implements IEvictionStrategy<K> {
 
     private final Map<Integer, Node<DoublyLinkedList<K, LeastFrequentlyUsedMetadata>, LeastFrequentlyUsedMetadata>> freqMap;
@@ -101,11 +103,13 @@ public class LeastFrequentlyUsedStrategy<K> implements IEvictionStrategy<K> {
     @Override
     public void onPut(K key) {
         coreInsertionAndAccessLogic(key);
+        log.debug("[Eviction.Strategy.LFU.PUT] [key={}]", key);
     }
 
     @Override
     public void onAccess(K key) {
         coreInsertionAndAccessLogic(key);
+        log.debug("[Eviction.Strategy.LFU.ACCESS] [key={}]", key);
     }
 
     @Override
@@ -117,14 +121,18 @@ public class LeastFrequentlyUsedStrategy<K> implements IEvictionStrategy<K> {
             outerList.deleteNode(freqMap.get(curFreq));
         }
         elementMap.remove(key);
+        log.debug("[Eviction.Strategy.LFU.REMOVE] [key={}]", key);
     }
 
     @Override
     public Optional<K> evict() {
         if (outerList.isEmpty()) {
+            log.debug("[Eviction.Strategy.LRU.EVICT] [<empty>]");
             return Optional.empty();
         }
-        return Optional.of(outerList.getFirst().getData().getFirst().getData());
+        Optional<K> evictionEntry = Optional.of(outerList.getFirst().getData().getFirst().getData());
+        log.debug("[Eviction.Strategy.LFU.EVICT]");
+        return evictionEntry;
     }
 
 }

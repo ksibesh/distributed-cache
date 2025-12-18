@@ -2,11 +2,13 @@ package com.example.cache.eviction;
 
 import com.example.cache.eviction.ds.DoublyLinkedList;
 import com.example.cache.eviction.ds.domain.Node;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 public class FirstInFirstOutStrategy<K> implements IEvictionStrategy<K> {
     private final DoublyLinkedList<K, Void> queue;
     private final Map<K, Node<K, Void>> elementMap;
@@ -38,12 +40,14 @@ public class FirstInFirstOutStrategy<K> implements IEvictionStrategy<K> {
             queue.insertLast(key, null);
             elementMap.put(key, queue.getLast());
         }
+        log.debug("[Eviction.Strategy.FIFO.PUT] [key={}]", key);
     }
 
     @Override
     public void onAccess(K key) {
         // There should be no-op, as from the concept of FIFO the element that was inserted fist should be evicted first
         // it doesn't matter how many times the object was queried.
+        log.debug("[Eviction.Strategy.FIFO.ACCESS] [key={}]", key);
     }
 
     @Override
@@ -57,10 +61,13 @@ public class FirstInFirstOutStrategy<K> implements IEvictionStrategy<K> {
             elementMap.remove(key);
         }
         // No need to perform any operation if key is not present in elementMap, there is nothing to delete in that case.
+        log.debug("[Eviction.Strategy.FIFO.REMOVE] [key={}]", key);
     }
 
     @Override
     public Optional<K> evict() {
-        return Optional.ofNullable(queue.getFirst()).map(Node::getData);
+        Optional<K> evictionEntry =  Optional.ofNullable(queue.getFirst()).map(Node::getData);
+        log.debug("[Eviction.Strategy.FIFO.EVICT]");
+        return evictionEntry;
     }
 }

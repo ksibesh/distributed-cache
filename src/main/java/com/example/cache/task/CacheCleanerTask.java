@@ -35,18 +35,17 @@ public class CacheCleanerTask<K, V> implements Runnable {
 
     @Override
     public void run() {
-        log.info("Cache Cleaner Task Started.");
+        log.info("[CacheCleanerTask.Start]");
         while (running) {
             try {
                 cacheQueue.poll(100, TimeUnit.MILLISECONDS).ifPresent(this::dispatchOperation);
-                /*cleanupExpiredKeys();*/
                 cleanupExpiredKeys();
                 enforceCapacityLimit();
             } catch (Exception e) {
-                log.error("Error processing cache operation. Msg={}", e.getMessage(), e);
+                log.error("[CacheCleanerTask.Error] [ErrorMessage={}]", e.getMessage(), e);
             }
         }
-        log.info("Cache Cleaner Task Stopped.");
+        log.info("[CacheCleanerTask.Stop]");
     }
 
     public void stop() {
@@ -57,16 +56,16 @@ public class CacheCleanerTask<K, V> implements Runnable {
         switch (operation.getType()) {
             case PUT:
                 evictionStrategy.onPut(operation.getKey());
-
-                CacheEntry<V> entry = cacheMap.get(operation.getKey());
-                ttlQueue.add(entry.getExpirationTime(), operation.getKey());
-
+                log.debug("[CacheCleanerTask.Dispatch.PUT] [key={}]", operation.getKey());
+                ttlQueue.add(cacheMap.get(operation.getKey()).getExpirationTime(), operation.getKey());
                 break;
             case ACCESS:
                 evictionStrategy.onAccess(operation.getKey());
+                log.debug("[CacheCleanerTask.Dispatch.ACCESS] [key={}]", operation.getKey());
                 break;
             case REMOVE:
                 evictionStrategy.onRemove(operation.getKey());
+                log.debug("[CacheCleanerTask.Dispatch.REMOVE] [key={}]", operation.getKey());
                 break;
         }
     }
@@ -78,7 +77,7 @@ public class CacheCleanerTask<K, V> implements Runnable {
                     .filter(cacheMap::containsKey).forEach(key -> {
                         cacheMap.remove(key);
                         evictionStrategy.onRemove(key);
-                        log.debug("Cleaned expired key. Key={}", key);
+                        log.debug("[CacheCleanerTask.Cleanup.TTL.ExpiredKeys] [key={}]", key);
                     });
         }
     }
@@ -93,13 +92,11 @@ public class CacheCleanerTask<K, V> implements Runnable {
                 K key = keyToEvict.get();
                 cacheMap.remove(key);
                 evictionStrategy.onRemove(key);
-                log.debug("Eviction made to enforce cache capacity limit. EvictedKey={}, EvictionStrategy={}",
-                        key, evictionStrategy.getClass().getName());
+                log.debug("[CacheCleanerTask.Eviction] [key={}] [strategy={}]", key, evictionStrategy.getClass().getName());
 
             } else {
 
-                log.error("Unable to find an eligible key to evict while enforcing cache capacity limit. EvictionStrategy={}",
-                        evictionStrategy.getClass().getName());
+                log.error("[CacheCleanerTask.Eviction.Error] [strategy={}]", evictionStrategy.getClass().getName());
                 break;
 
             }

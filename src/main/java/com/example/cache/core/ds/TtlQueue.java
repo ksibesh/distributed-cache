@@ -28,6 +28,7 @@ public class TtlQueue<K> {
         expirationMap.computeIfAbsent(ttlInSec, t -> Collections.newSetFromMap(new ConcurrentHashMap<>())).add(key);
         // update the entry in the reverseIndex for future cases
         reverseIndex.put(key, ttlInSec);
+        log.info("[TTLQueue.Add] [key={}] [ttlInSec={}]", key, ttlInSec);
     }
 
     /**
@@ -48,7 +49,9 @@ public class TtlQueue<K> {
     }
 
     public Optional<Long> peek() {
-        return Optional.ofNullable(expirationMap.firstKey());
+        Optional<Long> peekValue =  Optional.ofNullable(expirationMap.firstKey());
+        log.debug("[TTLQueue.Peek]");
+        return peekValue;
     }
 
     public Optional<Set<K>> poll() {
@@ -59,10 +62,13 @@ public class TtlQueue<K> {
         if (keys == null || keys.isEmpty()) {
             return poll();
         }
+        log.debug("[TTLQueue.Poll]");
         return Optional.of(keys);
     }
 
     public int size() {
-        return expirationMap.size();
+        int size = expirationMap.size();
+        log.debug("[TTLQueue.Size] [size={}]", size);
+        return size;
     }
 }
