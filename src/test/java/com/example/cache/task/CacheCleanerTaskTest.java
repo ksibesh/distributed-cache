@@ -6,6 +6,7 @@ import com.example.cache.core.domain.CacheOperationType;
 import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.core.ds.TtlQueue;
 import com.example.cache.eviction.IEvictionStrategy;
+import com.example.cache.metrics.CacheMetrics;
 import com.example.cache.util.SystemUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ public class CacheCleanerTaskTest {
     private TtlQueue<String> ttlQueue;
     private IEvictionStrategy<String> evictionStrategy;
     private ConcurrentHashMap<String, CacheEntry<String>> cacheMap;
+    private CacheMetrics cacheMetrics;
 
     private CacheCleanerTask<String, String> cacheCleanerTask;
 
@@ -38,8 +40,9 @@ public class CacheCleanerTaskTest {
         ttlQueue = (TtlQueue<String>) mock(TtlQueue.class);
         evictionStrategy = (IEvictionStrategy<String>) mock(IEvictionStrategy.class);
         cacheMap = (ConcurrentHashMap<String, CacheEntry<String>>) mock(ConcurrentHashMap.class);
+        cacheMetrics = mock(CacheMetrics.class);
 
-        cacheCleanerTask = new CacheCleanerTask<>(cacheQueue, ttlQueue, evictionStrategy, cacheMap, maxCacheSize);
+        cacheCleanerTask = new CacheCleanerTask<>(cacheQueue, ttlQueue, evictionStrategy, cacheMap, maxCacheSize, cacheMetrics);
     }
 
     private void runTaskCycle(Optional<CacheOperation<String>> operation) {

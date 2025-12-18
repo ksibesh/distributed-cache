@@ -1,6 +1,7 @@
 package com.example.cache.core.ds;
 
 import com.example.cache.core.domain.CacheOperation;
+import com.example.cache.metrics.CacheMetrics;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
@@ -11,9 +12,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class CacheQueue<K> {
     private final BlockingQueue<CacheOperation<K>> queue;
+    private final CacheMetrics cacheMetrics;
 
-    public CacheQueue(int capacity) {
-        queue = new LinkedBlockingQueue<>(capacity);
+    public CacheQueue(int capacity, CacheMetrics cacheMetrics) {
+        this.queue = new LinkedBlockingQueue<>(capacity);
+        this.cacheMetrics = cacheMetrics;
     }
 
     /**
@@ -25,7 +28,12 @@ public class CacheQueue<K> {
      */
     public boolean submit(CacheOperation<K> operation) {
         boolean submitResult = queue.offer(operation);
-        log.debug("[CacheQueue.Submit] [operation={}]", operation);
+        if (!submitResult) {
+            cacheMetrics.incrementDroppedOperations();
+            log.debug("[Operation Dropped:CacheQueue.Submit] [operation={}] [msg=Queue is full.]", operation);
+        } else {
+            log.debug("[CacheQueue.Submit] [operation={}]", operation);
+        }
         return submitResult;
     }
 

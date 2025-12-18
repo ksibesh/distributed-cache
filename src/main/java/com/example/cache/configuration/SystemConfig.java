@@ -6,6 +6,8 @@ import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.core.ds.TtlQueue;
 import com.example.cache.eviction.FirstInFirstOutStrategy;
 import com.example.cache.eviction.LeastRecentUsedStrategy;
+import com.example.cache.metrics.CacheMetrics;
+import com.example.cache.metrics.CacheMetricsBinder;
 import com.example.cache.task.CacheCleanerTask;
 import com.example.cache.task.CacheCleanerTaskInitializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,18 +25,31 @@ public class SystemConfig {
     }
 
     @Bean
-    public CacheQueue<String> cacheQueue() {
-        return new CacheQueue<>(10);
-    }
-
-    @Bean
     public TtlQueue<String> ttlQueue() {
         return new TtlQueue<>();
     }
 
     @Bean
-    public DistributedCacheImpl<String ,String> distributedCache() {
-        return new DistributedCacheImpl<>(cacheMap(), cacheQueue());
+    public CacheMetrics cacheMetrics() {
+        return new CacheMetrics();
+    }
+
+    @Bean
+    public CacheQueue<String> cacheQueue() {
+        return new CacheQueue<>(10, cacheMetrics());
+    }
+
+    @Bean
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public CacheMetricsBinder cacheMetricsBinder(CacheMetrics cacheMetrics,
+                                                 ConcurrentHashMap cacheMap,
+                                                 TtlQueue<String> ttlQueue, CacheQueue<String> cacheQueue) {
+        return new CacheMetricsBinder(cacheMetrics, cacheMap, ttlQueue, cacheQueue);
+    }
+
+    @Bean
+    public DistributedCacheImpl<String, String> distributedCache() {
+        return new DistributedCacheImpl<>(cacheMap(), cacheQueue(), cacheMetrics());
     }
 
     @Bean
@@ -63,7 +78,8 @@ public class SystemConfig {
                 ttlQueue(),
                 leastFrequentlyUsedStrategy(),
                 cacheMap(),
-                maximumSize
+                maximumSize,
+                cacheMetrics()
         );
     }
 

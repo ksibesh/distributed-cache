@@ -12,5 +12,4 @@ public class CacheEntry<V> {
     final V value;
     final long creationTime;
     final long expirationTime;
-    final AtomicLong lastAccessTime;
 }

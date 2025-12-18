@@ -2,6 +2,7 @@ package com.example.cache.core;
 
 import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.ds.CacheQueue;
+import com.example.cache.metrics.CacheMetrics;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,8 +16,9 @@ public class DistributedCacheImplTest {
     @BeforeEach
     public void setup() {
         ConcurrentHashMap<String, CacheEntry<String>> cacheMap = new ConcurrentHashMap<>();
-        CacheQueue<String> queue = new CacheQueue<>(10);
-        cache = new DistributedCacheImpl<>(cacheMap, queue);
+        CacheMetrics cacheMetrics = new CacheMetrics();
+        CacheQueue<String> queue = new CacheQueue<>(10, cacheMetrics);
+        cache = new DistributedCacheImpl<>(cacheMap, queue, cacheMetrics);
     }
 
     @Test

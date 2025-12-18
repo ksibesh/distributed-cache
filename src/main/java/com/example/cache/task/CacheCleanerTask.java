@@ -5,6 +5,7 @@ import com.example.cache.core.domain.CacheOperation;
 import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.core.ds.TtlQueue;
 import com.example.cache.eviction.IEvictionStrategy;
+import com.example.cache.metrics.CacheMetrics;
 import com.example.cache.util.SystemUtil;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,17 +21,19 @@ public class CacheCleanerTask<K, V> implements Runnable {
     private final IEvictionStrategy<K> evictionStrategy;
     private final ConcurrentHashMap<K, CacheEntry<V>> cacheMap;
     private final int maximumSize;
+    private final CacheMetrics cacheMetrics;
 
     private volatile boolean running = true;
 
     public CacheCleanerTask(CacheQueue<K> cacheQueue, TtlQueue<K> ttlQueue, IEvictionStrategy<K> evictionStrategy,
-                            ConcurrentHashMap<K, CacheEntry<V>> cacheMap, int maximumCacheSize) {
+                            ConcurrentHashMap<K, CacheEntry<V>> cacheMap, int maximumCacheSize, CacheMetrics cacheMetrics) {
 
         this.cacheQueue = cacheQueue;
         this.ttlQueue = ttlQueue;
         this.evictionStrategy = evictionStrategy;
         this.cacheMap = cacheMap;
         this.maximumSize = maximumCacheSize;
+        this.cacheMetrics = cacheMetrics;
     }
 
     @Override
@@ -77,6 +80,7 @@ public class CacheCleanerTask<K, V> implements Runnable {
                     .filter(cacheMap::containsKey).forEach(key -> {
                         cacheMap.remove(key);
                         evictionStrategy.onRemove(key);
+                        cacheMetrics.incrementTtlExpirations();
                         log.debug("[CacheCleanerTask.Cleanup.TTL.ExpiredKeys] [key={}]", key);
                     });
         }
@@ -92,6 +96,7 @@ public class CacheCleanerTask<K, V> implements Runnable {
                 K key = keyToEvict.get();
                 cacheMap.remove(key);
                 evictionStrategy.onRemove(key);
+                cacheMetrics.incrementEvictions();
                 log.debug("[CacheCleanerTask.Eviction] [key={}] [strategy={}]", key, evictionStrategy.getClass().getName());
 
             } else {

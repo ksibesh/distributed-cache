@@ -2,6 +2,7 @@ package com.example.cache.core.ds;
 
 import com.example.cache.core.domain.CacheOperation;
 import com.example.cache.core.domain.CacheOperationType;
+import com.example.cache.metrics.CacheMetrics;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,8 @@ public class CacheQueueTest {
 
     @BeforeEach
     public void setup() {
-        cacheQueue = new CacheQueue<String>(100);
+        CacheMetrics cacheMetrics = new CacheMetrics();
+        cacheQueue = new CacheQueue<String>(100, cacheMetrics);
     }
 
     @Test
@@ -28,7 +30,7 @@ public class CacheQueueTest {
 
     @Test
     public void testQueueInsertionMultipleOperation() {
-        String[] keys = new String[] {"putKey", "getKey", "deleteKey"};
+        String[] keys = new String[]{"putKey", "getKey", "deleteKey"};
         cacheQueue.submit(CacheOperation.of(CacheOperationType.PUT, keys[0]));
         cacheQueue.submit(CacheOperation.of(CacheOperationType.ACCESS, keys[1]));
         cacheQueue.submit(CacheOperation.of(CacheOperationType.REMOVE, keys[2]));
@@ -38,7 +40,7 @@ public class CacheQueueTest {
 
     @Test
     public void testQueuePollWithMultipleEntriesUntillEmpty() {
-        String[] keys = new String[] {"putKey", "getKey", "deleteKey"};
+        String[] keys = new String[]{"putKey", "getKey", "deleteKey"};
         cacheQueue.submit(CacheOperation.of(CacheOperationType.PUT, keys[0]));
         cacheQueue.submit(CacheOperation.of(CacheOperationType.ACCESS, keys[1]));
         cacheQueue.submit(CacheOperation.of(CacheOperationType.REMOVE, keys[2]));
