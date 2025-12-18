@@ -1,4 +1,12 @@
 package com.example.cache.controller.domain;
 
-public class GetResponse {
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+
+@Data
+@ToString
+@EqualsAndHashCode(callSuper = true)
+public class GetResponse extends BaseResponse {
+    String value;
 }

@@ -1,4 +1,12 @@
 package com.example.cache.controller.domain;
 
-public class PutResponse {
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+
+@Data
+@ToString
+@EqualsAndHashCode(callSuper = true)
+public class PutResponse extends BaseResponse {
+    private boolean putStatus = false;
 }

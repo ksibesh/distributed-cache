@@ -7,6 +7,7 @@ public final class SystemUtil {
 
     public static final int MAX_CACHE_SIZE = 100000;
     public static final int BREATHABLE_CACHE_SPACE = 100;
+    public static final String DEFAULT_ERROR_CODE = "ERROR.DEFAULT";
 
     private SystemUtil() {
         // no-op
