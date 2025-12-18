@@ -7,7 +7,8 @@ import com.example.cache.core.ds.TtlQueue;
 import com.example.cache.eviction.FirstInFirstOutStrategy;
 import com.example.cache.eviction.LeastRecentUsedStrategy;
 import com.example.cache.task.CacheCleanerTask;
-import com.example.cache.util.SystemUtil;
+import com.example.cache.task.CacheCleanerTaskInitializer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -17,44 +18,60 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SystemConfig {
 
     @Bean
-    public <K, V> ConcurrentHashMap<K, CacheEntry<V>> cacheMap() {
+    public ConcurrentHashMap<String, CacheEntry<String>> cacheMap() {
         return new ConcurrentHashMap<>();
     }
 
     @Bean
-    public <K> CacheQueue<K> cacheQueue() {
+    public CacheQueue<String> cacheQueue() {
         return new CacheQueue<>(10);
     }
 
     @Bean
-    public <K> TtlQueue<K> ttlQueue() {
+    public TtlQueue<String> ttlQueue() {
         return new TtlQueue<>();
     }
 
     @Bean
-    public <K, V> DistributedCacheImpl<K, V> distributedCache() {
+    public DistributedCacheImpl<String ,String> distributedCache() {
         return new DistributedCacheImpl<>(cacheMap(), cacheQueue());
     }
 
     @Bean
-    public <K> FirstInFirstOutStrategy<K> firstInFirstOutStrategy() {
+    public FirstInFirstOutStrategy<String> firstInFirstOutStrategy() {
         return new FirstInFirstOutStrategy<>();
     }
 
     @Bean
-    public <K> LeastRecentUsedStrategy<K> leastFrequentlyUsedStrategy() {
+    public LeastRecentUsedStrategy<String> leastFrequentlyUsedStrategy() {
         return new LeastRecentUsedStrategy<>();
     }
 
     @Bean
-    public <K> LeastRecentUsedStrategy<K> leastRecentUsedStrategy() {
+    public LeastRecentUsedStrategy<String> leastRecentUsedStrategy() {
         return new LeastRecentUsedStrategy<>();
     }
 
     @Bean
-    public <K, V> CacheCleanerTask<K, V> cacheCleanerTask() {
-        int maximumSize = SystemUtil.MAX_CACHE_SIZE - SystemUtil.BREATHABLE_CACHE_SPACE;
-        return new CacheCleanerTask<>(cacheQueue(), ttlQueue(), leastFrequentlyUsedStrategy(), cacheMap(),
-                maximumSize);
+    public CacheCleanerTask<String, String> cacheCleanerTask(
+            @Value("${cache.max-size:1000}") int maxCacheSize,
+            @Value("${cache.breathable-space:100}") int breathableSpace
+    ) {
+        int maximumSize = maxCacheSize - breathableSpace;
+        return new CacheCleanerTask<>(
+                cacheQueue(),
+                ttlQueue(),
+                leastFrequentlyUsedStrategy(),
+                cacheMap(),
+                maximumSize
+        );
+    }
+
+    @Bean(initMethod = "init", destroyMethod = "destroy")
+    public CacheCleanerTaskInitializer cacheCleanerTaskInitializer(
+            CacheCleanerTask<String, String> cacheCleanerTask,
+            @Value("${cache.cleaner.threads:1}") int cleanerThreadPoolSize
+    ) {
+        return new CacheCleanerTaskInitializer(cacheCleanerTask, cleanerThreadPoolSize);
     }
 }
