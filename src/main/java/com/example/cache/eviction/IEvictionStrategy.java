@@ -6,9 +6,9 @@ public interface IEvictionStrategy<K> {
 
     void onPut(K key);
 
-    void onAccess(K key);
+    void onGet(K key);
 
-    void onRemove(K key);
+    void onDelete(K key);
 
     Optional<K> evict();
 }

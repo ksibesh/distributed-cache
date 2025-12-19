@@ -31,7 +31,7 @@ public class FirstInFirstOutStrategyTest {
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[0], evictedItem.get());
 
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
         {
             Optional<String> evictedItems = fifoStrategy.evict();
@@ -50,13 +50,13 @@ public class FirstInFirstOutStrategyTest {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[0], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
         {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[1], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
         {
             Optional<String> evictedItem = fifoStrategy.evict();
@@ -72,13 +72,13 @@ public class FirstInFirstOutStrategyTest {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[2], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
         {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[1], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
     }
 
@@ -95,19 +95,19 @@ public class FirstInFirstOutStrategyTest {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[1], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
         {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[0], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
         {
             Optional<String> evictedItem = fifoStrategy.evict();
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[2], evictedItem.get());
-            fifoStrategy.onRemove(evictedItem.get());
+            fifoStrategy.onDelete(evictedItem.get());
         }
     }
 

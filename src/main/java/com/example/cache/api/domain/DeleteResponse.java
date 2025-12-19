@@ -1,4 +1,4 @@
-package com.example.cache.controller.domain;
+package com.example.cache.api.domain;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -7,6 +7,6 @@ import lombok.ToString;
 @Data
 @ToString
 @EqualsAndHashCode(callSuper = true)
-public class RemoveResponse extends BaseResponse {
+public class DeleteResponse extends BaseResponse {
     private boolean removeStatus = false;
 }

@@ -1,5 +1,6 @@
 package com.example.cache.task;
 
+import com.example.cache.core.IDistributedCache;
 import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.domain.CacheOperation;
 import com.example.cache.core.domain.CacheOperationType;
@@ -14,38 +15,36 @@ import org.mockito.MockedStatic;
 
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.Mockito.*;
 
 public class CacheCleanerTaskTest {
 
-    private CacheQueue<String> cacheQueue;
+    private CacheQueue<String, String> cacheQueue;
     private TtlQueue<String> ttlQueue;
     private IEvictionStrategy<String> evictionStrategy;
-    private ConcurrentHashMap<String, CacheEntry<String>> cacheMap;
+    private IDistributedCache<String, String> cacheCore;
     private CacheMetrics cacheMetrics;
 
     private CacheCleanerTask<String, String> cacheCleanerTask;
 
     private final String testKey = "testKey";
-    private final String testValue = "testValue";
     private final int maxCacheSize = 10;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
-        cacheQueue = (CacheQueue<String>) mock(CacheQueue.class);
+        cacheQueue = (CacheQueue<String, String>) mock(CacheQueue.class);
         ttlQueue = (TtlQueue<String>) mock(TtlQueue.class);
         evictionStrategy = (IEvictionStrategy<String>) mock(IEvictionStrategy.class);
-        cacheMap = (ConcurrentHashMap<String, CacheEntry<String>>) mock(ConcurrentHashMap.class);
         cacheMetrics = mock(CacheMetrics.class);
+        cacheCore = (IDistributedCache<String, String>) mock(IDistributedCache.class);
 
-        cacheCleanerTask = new CacheCleanerTask<>(cacheQueue, ttlQueue, evictionStrategy, cacheMap, maxCacheSize, cacheMetrics);
+        cacheCleanerTask = new CacheCleanerTask<>(cacheQueue, ttlQueue, evictionStrategy, maxCacheSize, cacheMetrics, cacheCore);
     }
 
-    private void runTaskCycle(Optional<CacheOperation<String>> operation) {
+    private void runTaskCycle(Optional<CacheOperation<String, String>> operation) {
         when(cacheQueue.poll(anyLong(), any(TimeUnit.class)))
                 .thenReturn(operation)
                 .thenAnswer(invocation -> {
@@ -58,43 +57,42 @@ public class CacheCleanerTaskTest {
     @Test
     public void testDispatchOperationForPut() {
         long expirationTime = SystemUtil.getCurrentTimeInSec() + 60;
-        CacheOperation<String> putOperation = CacheOperation.of(CacheOperationType.PUT, testKey);
-        CacheEntry<String> entry = CacheEntry.<String>builder().expirationTime(expirationTime).value(testValue).build();
-
-        when(cacheMap.get(testKey)).thenReturn(entry);
+        CacheEntry<String> entry = CacheEntry.<String>builder()
+                .expirationTime(expirationTime)
+                .build();
+        CacheOperation<String, String> putOperation = CacheOperation.of(CacheOperationType.PUT, testKey, entry);
 
         runTaskCycle(Optional.of(putOperation));
 
         verify(evictionStrategy, times(1)).onPut(testKey);
-        verify(cacheMap, times(1)).get(testKey);
         verify(ttlQueue, times(1)).add(expirationTime, testKey);
 
-        verify(evictionStrategy, never()).onAccess(anyString());
-        verify(evictionStrategy, never()).onRemove(anyString());
+        verify(evictionStrategy, never()).onGet(anyString());
+        verify(evictionStrategy, never()).onDelete(anyString());
     }
 
     @Test
     public void testDispatchOperationForAccess() {
-        CacheOperation<String> accessOperation = CacheOperation.of(CacheOperationType.ACCESS, testKey);
+        CacheOperation<String, String> accessOperation = CacheOperation.of(CacheOperationType.GET, testKey);
 
         runTaskCycle(Optional.of(accessOperation));
 
-        verify(evictionStrategy, times(1)).onAccess(testKey);
+        verify(evictionStrategy, times(1)).onGet(testKey);
 
         verify(evictionStrategy, never()).onPut(anyString());
-        verify(evictionStrategy, never()).onRemove(anyString());
+        verify(evictionStrategy, never()).onDelete(anyString());
     }
 
     @Test
     public void testDispatchOperationForRemove() {
-        CacheOperation<String> removeOperation = CacheOperation.of(CacheOperationType.REMOVE, testKey);
+        CacheOperation<String, String> removeOperation = CacheOperation.of(CacheOperationType.DELETE, testKey);
 
         runTaskCycle(Optional.of(removeOperation));
 
-        verify(evictionStrategy, times(1)).onRemove(testKey);
+        verify(evictionStrategy, times(1)).onDelete(testKey);
 
         verify(evictionStrategy, never()).onPut(anyString());
-        verify(evictionStrategy, never()).onAccess(anyString());
+        verify(evictionStrategy, never()).onGet(anyString());
     }
 
     @Test
@@ -114,19 +112,15 @@ public class CacheCleanerTaskTest {
                     .thenReturn(Optional.of(nonExpiredTimeInSec));
             when(ttlQueue.poll()).thenReturn(Optional.of(expiredKeySet));
 
-            when(cacheMap.containsKey(expiredKey1)).thenReturn(true);
-            when(cacheMap.containsKey(expiredKey2)).thenReturn(true);
-            when(cacheMap.containsKey(nonExpiredKey1)).thenReturn(true);
 
             runTaskCycle(Optional.empty());
 
-            verify(cacheMap, never()).containsKey(nonExpiredKey1);
-            verify(cacheMap, times(1)).remove(expiredKey1);
-            verify(cacheMap, times(1)).remove(expiredKey2);
-            verify(cacheMap, never()).remove(nonExpiredKey1);
-            verify(evictionStrategy, times(1)).onRemove(expiredKey1);
-            verify(evictionStrategy, times(1)).onRemove(expiredKey2);
-            verify(evictionStrategy, never()).onRemove(nonExpiredKey1);
+            verify(evictionStrategy, times(1)).onDelete(expiredKey1);
+            verify(evictionStrategy, times(1)).onDelete(expiredKey2);
+            verify(cacheCore, times(1)).submitDelete(expiredKey1);
+            verify(cacheCore, times(1)).submitDelete(expiredKey2);
+            verify(evictionStrategy, never()).onDelete(nonExpiredKey1);
+            verify(cacheMetrics, times(2)).incrementTtlExpirations();
         }
     }
 
@@ -143,48 +137,54 @@ public class CacheCleanerTaskTest {
             when(ttlQueue.peek()).thenReturn(Optional.of(nonExpiredTimeInSec));
             when(ttlQueue.poll()).thenReturn(Optional.of(nonExpiredKeySet));
 
-            when(cacheMap.containsKey(nonExpiredKey1)).thenReturn(true);
-
             runTaskCycle(Optional.empty());
 
-            verify(cacheMap, never()).containsKey(nonExpiredKey1);
-            verify(cacheMap, never()).remove(nonExpiredKey1);
-            verify(evictionStrategy, never()).onRemove(nonExpiredKey1);
+            verify(ttlQueue, never()).poll();
+            verify(evictionStrategy, never()).onDelete(nonExpiredKey1);
+            verify(cacheCore, never()).submitDelete(nonExpiredKey1);
+            verify(cacheMetrics, never()).incrementTtlExpirations();
         }
     }
 
     @Test
     public void testEnforceCapacityLimit() {
-        when(cacheMap.size()).thenReturn(maxCacheSize + 1).thenReturn(maxCacheSize);
+        when(cacheCore.size()).thenReturn(maxCacheSize + 1).thenReturn(maxCacheSize);
         when(evictionStrategy.evict()).thenReturn(Optional.of(testKey));
 
         runTaskCycle(Optional.empty());
 
-        verify(cacheMap, times(1)).remove(testKey);
-        verify(evictionStrategy, times(1)).onRemove(testKey);
+        verify(evictionStrategy, times(1)).evict();
+        verify(cacheCore, times(1)).submitDelete(testKey);
+        verify(evictionStrategy, times(1)).onDelete(testKey);
+        verify(cacheMetrics, times(1)).incrementEvictions();
     }
 
     @Test
     public void testEnforceCapacityLimitWhenSizeLessThanLimit() {
-        when(cacheMap.size()).thenReturn(maxCacheSize);
+        when(cacheCore.size()).thenReturn(maxCacheSize - 1);
         when(evictionStrategy.evict()).thenReturn(Optional.of(testKey));
 
         runTaskCycle(Optional.empty());
 
-        verify(cacheMap, never()).remove(testKey);
-        verify(evictionStrategy, never()).onRemove(testKey);
+        verify(evictionStrategy, never()).evict();
+        verify(evictionStrategy, never()).onDelete(testKey);
+        verify(cacheCore, never()).submitDelete(testKey);
+        verify(cacheMetrics, never()).incrementEvictions();
     }
 
     @Test
     public void testEnforceCapacityLimitWhenSizeAboveLimitButIssueWithEviction() {
         // intentionally haven't placed another thenReturn in cascade, coz ideally the loop should be broken by break clause
-        when(cacheMap.size()).thenReturn(maxCacheSize + 1);
+        when(cacheCore.size()).thenReturn(maxCacheSize + 1);
         when(evictionStrategy.evict()).thenReturn(Optional.empty());
 
         runTaskCycle(Optional.empty());
 
-        verify(cacheMap, never()).remove(testKey);
-        verify(evictionStrategy, never()).onRemove(testKey);
+        // here times have value 2 coz runTaskCycle runs it 2 times
+        verify(evictionStrategy, times(2)).evict();
+        verify(evictionStrategy, never()).onDelete(anyString());
+        verify(cacheCore, never()).submitDelete(anyString());
+        verify(cacheMetrics, never()).incrementEvictions();
     }
 
 }

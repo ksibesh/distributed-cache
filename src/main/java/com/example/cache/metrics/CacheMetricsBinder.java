@@ -14,10 +14,10 @@ public class CacheMetricsBinder implements MeterBinder {
     private final CacheMetrics cacheMetrics;
     private final ConcurrentHashMap<?, CacheEntry<?>> cacheMap;
     private final TtlQueue<?> ttlQueue;
-    private final CacheQueue<?> cacheQueue;
+    private final CacheQueue<?, ?> cacheQueue;
 
     public CacheMetricsBinder(CacheMetrics cacheMetrics, ConcurrentHashMap<?, CacheEntry<?>> cacheMap,
-                              TtlQueue<?> ttlQueue, CacheQueue<?> cacheQueue) {
+                              TtlQueue<?> ttlQueue, CacheQueue<?, ?> cacheQueue) {
         this.cacheMetrics = cacheMetrics;
         this.cacheMap = cacheMap;
         this.ttlQueue = ttlQueue;

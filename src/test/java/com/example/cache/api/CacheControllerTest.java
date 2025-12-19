@@ -1,26 +1,30 @@
-package com.example.cache.controller;
+package com.example.cache.api;
 
-import com.example.cache.controller.domain.GetResponse;
-import com.example.cache.controller.domain.PutRequest;
-import com.example.cache.controller.domain.PutResponse;
-import com.example.cache.controller.domain.RemoveResponse;
+import com.example.cache.api.advice.GlobalResponseAdvice;
+import com.example.cache.api.domain.GetResponse;
+import com.example.cache.api.domain.PutRequest;
+import com.example.cache.api.domain.PutResponse;
+import com.example.cache.api.domain.DeleteResponse;
 import com.example.cache.core.IDistributedCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.ObjectMapper;
+
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static com.example.cache.util.SystemUtil.DEFAULT_ERROR_CODE;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class CacheControllerTest {
     private MockMvc mockMvc;
-    private IDistributedCache<String, String> distributedCache;
+    private IDistributedCache<String, String> cacheCore;
     private ObjectMapper objectMapper;
 
     private final String CACHE_ENDPOINT = "/cache";
@@ -32,26 +36,34 @@ public class CacheControllerTest {
     @SuppressWarnings("unchecked")
     public void setup() {
         objectMapper = new ObjectMapper();
-        distributedCache = (IDistributedCache<String, String>) mock(IDistributedCache.class);
+        cacheCore = (IDistributedCache<String, String>) mock(IDistributedCache.class);
 
-        CacheController cacheController = new CacheController(distributedCache);
-        mockMvc = MockMvcBuilders.standaloneSetup(cacheController).build();
+        CacheController cacheController = new CacheController(cacheCore);
+        mockMvc = MockMvcBuilders.standaloneSetup(cacheController)
+                .setControllerAdvice(new GlobalResponseAdvice())
+                .build();
     }
 
     @Test
     public void testPutSuccess() throws Exception {
+        when(cacheCore.submitPut(TEST_KEY, TEST_VALUE, TEST_TTL)).thenReturn(CompletableFuture.completedFuture(null));
+
         PutRequest request = new PutRequest();
         request.setKey(TEST_KEY);
         request.setValue(TEST_VALUE);
         request.setTtlInSec(TEST_TTL);
 
-        String responseContent = mockMvc.perform(put(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(put(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        verify(distributedCache, times(1)).put(TEST_KEY, TEST_VALUE, TEST_TTL);
+        verify(cacheCore, times(1)).submitPut(TEST_KEY, TEST_VALUE, TEST_TTL);
 
         PutResponse response = objectMapper.readValue(responseContent, PutResponse.class);
         assertTrue(response.isPutStatus());
@@ -66,11 +78,16 @@ public class CacheControllerTest {
         request.setTtlInSec(TEST_TTL);
 
         String errorMessage = "Storage capacity exceeded.";
-        doThrow(new RuntimeException(errorMessage)).when(distributedCache).put(TEST_KEY, TEST_VALUE, TEST_TTL);
+        when(cacheCore.submitPut(TEST_KEY, TEST_VALUE, TEST_TTL))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException(errorMessage)));
 
-        String responseContent = mockMvc.perform(put(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(put(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isInternalServerError())
                 .andReturn().getResponse().getContentAsString();
 
@@ -82,15 +99,18 @@ public class CacheControllerTest {
 
     @Test
     public void testGetSuccess() throws Exception {
-        when(distributedCache.get(TEST_KEY)).thenReturn(TEST_VALUE);
+        when(cacheCore.submitGet(TEST_KEY)).thenReturn(CompletableFuture.completedFuture(TEST_VALUE));
 
-        String responseContent = mockMvc.perform(get(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(get(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("key", TEST_KEY))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        verify(distributedCache, times(1)).get(TEST_KEY);
+        verify(cacheCore, times(1)).submitGet(TEST_KEY);
         GetResponse response = objectMapper.readValue(responseContent, GetResponse.class);
         assertNull(response.getErrorCode());
         assertEquals(TEST_VALUE, response.getValue());
@@ -98,15 +118,18 @@ public class CacheControllerTest {
 
     @Test
     public void testGetSuccessWithCacheMiss() throws Exception {
-        when(distributedCache.get(TEST_KEY)).thenReturn(null);
+        when(cacheCore.submitGet(TEST_KEY)).thenReturn(CompletableFuture.completedFuture(null));
 
-        String responseContent = mockMvc.perform(get(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(get(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("key", TEST_KEY))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        verify(distributedCache, times(1)).get(TEST_KEY);
+        verify(cacheCore, times(1)).submitGet(TEST_KEY);
         GetResponse response = objectMapper.readValue(responseContent, GetResponse.class);
         assertNull(response.getErrorCode());
         assertNull(response.getValue());
@@ -115,11 +138,15 @@ public class CacheControllerTest {
     @Test
     public void testGetFailure() throws Exception {
         String errorMessage = "Internal server error while accessing cache.";
-        doThrow(new RuntimeException(errorMessage)).when(distributedCache).get(TEST_KEY);
+        when(cacheCore.submitGet(TEST_KEY))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException(errorMessage)));
 
-        String responseContent = mockMvc.perform(get(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(get(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("key", TEST_KEY))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isInternalServerError())
                 .andReturn().getResponse().getContentAsString();
 
@@ -131,16 +158,19 @@ public class CacheControllerTest {
 
     @Test
     public void testRemoveSuccess() throws Exception {
-        doNothing().when(distributedCache).delete(TEST_KEY);
+        when(cacheCore.submitDelete(TEST_KEY)).thenReturn(CompletableFuture.completedFuture(null));
 
-        String responseContent = mockMvc.perform(delete(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(delete(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("key", TEST_KEY))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        verify(distributedCache, times(1)).delete(TEST_KEY);
-        RemoveResponse response = objectMapper.readValue(responseContent, RemoveResponse.class);
+        verify(cacheCore, times(1)).submitDelete(TEST_KEY);
+        DeleteResponse response = objectMapper.readValue(responseContent, DeleteResponse.class);
         assertTrue(response.isRemoveStatus());
         assertNull(response.getErrorCode());
     }
@@ -148,15 +178,19 @@ public class CacheControllerTest {
     @Test
     public void testRemoveFailure() throws Exception {
         String errorMessage = "Cache unavailable at moment.";
-        doThrow(new RuntimeException(errorMessage)).when(distributedCache).delete(TEST_KEY);
+        when(cacheCore.submitDelete(TEST_KEY))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException(errorMessage)));
 
-        String responseContent = mockMvc.perform(delete(CACHE_ENDPOINT)
+        MvcResult mvcResult = mockMvc.perform(delete(CACHE_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("key", TEST_KEY))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        String responseContent = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isInternalServerError())
                 .andReturn().getResponse().getContentAsString();
 
-        RemoveResponse response = objectMapper.readValue(responseContent, RemoveResponse.class);
+        DeleteResponse response = objectMapper.readValue(responseContent, DeleteResponse.class);
         assertEquals(DEFAULT_ERROR_CODE, response.getErrorCode());
         assertEquals(errorMessage, response.getErrorMessage());
         assertFalse(response.isRemoveStatus());

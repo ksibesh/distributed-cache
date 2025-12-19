@@ -44,14 +44,14 @@ public class FirstInFirstOutStrategy<K> implements IEvictionStrategy<K> {
     }
 
     @Override
-    public void onAccess(K key) {
+    public void onGet(K key) {
         // There should be no-op, as from the concept of FIFO the element that was inserted fist should be evicted first
         // it doesn't matter how many times the object was queried.
         log.debug("[Eviction.Strategy.FIFO.ACCESS] [key={}]", key);
     }
 
     @Override
-    public void onRemove(K key) {
+    public void onDelete(K key) {
         // Here we will use the elementMap to identify the position of the key in the Doubly Linked List; this method
         // is the reason we didn't used Java version of Queue to maintain the keys, as with traditional queue on deletion
         // we have to traverse the whole DS to find the object.

@@ -12,4 +12,8 @@ public class CacheEntry<V> {
     final V value;
     final long creationTime;
     final long expirationTime;
+
+    public boolean isExpired(long now) {
+        return now >= expirationTime;
+    }
 }

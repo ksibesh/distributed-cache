@@ -25,13 +25,13 @@ public class LeastRecentUsedStrategy<K> implements IEvictionStrategy<K> {
     }
 
     @Override
-    public void onAccess(K key) {
+    public void onGet(K key) {
         lruMap.get(key);
         log.debug("[Eviction.Strategy.LRU.ACCESS] [key={}]", key);
     }
 
     @Override
-    public void onRemove(K key) {
+    public void onDelete(K key) {
         lruMap.remove(key);
         log.debug("[Eviction.Strategy.LRU.REMOVE] [key={}]", key);
     }

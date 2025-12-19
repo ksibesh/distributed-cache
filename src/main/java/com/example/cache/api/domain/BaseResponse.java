@@ -1,4 +1,4 @@
-package com.example.cache.controller.domain;
+package com.example.cache.api.domain;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

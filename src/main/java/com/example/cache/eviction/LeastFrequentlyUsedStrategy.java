@@ -107,13 +107,13 @@ public class LeastFrequentlyUsedStrategy<K> implements IEvictionStrategy<K> {
     }
 
     @Override
-    public void onAccess(K key) {
+    public void onGet(K key) {
         coreInsertionAndAccessLogic(key);
         log.debug("[Eviction.Strategy.LFU.ACCESS] [key={}]", key);
     }
 
     @Override
-    public void onRemove(K key) {
+    public void onDelete(K key) {
         Node<K, LeastFrequentlyUsedMetadata> node = elementMap.get(key);
         int curFreq = node.getMetadata().getFrequencyValue();
         freqMap.get(curFreq).getData().deleteNode(node);

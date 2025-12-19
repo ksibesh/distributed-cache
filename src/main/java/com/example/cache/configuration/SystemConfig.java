@@ -2,7 +2,8 @@ package com.example.cache.configuration;
 
 import com.example.cache.cluster.ConsistentHashClusterService;
 import com.example.cache.cluster.IClusterService;
-import com.example.cache.core.DistributedCacheImpl;
+import com.example.cache.core.IDistributedCache;
+import com.example.cache.core.SingleThreadedCacheCore;
 import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.core.ds.TtlQueue;
@@ -37,7 +38,7 @@ public class SystemConfig {
     }
 
     @Bean
-    public CacheQueue<String> cacheQueue() {
+    public CacheQueue<String, String> cacheQueue() {
         return new CacheQueue<>(10, cacheMetrics());
     }
 
@@ -45,7 +46,7 @@ public class SystemConfig {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public CacheMetricsBinder cacheMetricsBinder(CacheMetrics cacheMetrics,
                                                  ConcurrentHashMap cacheMap,
-                                                 TtlQueue<String> ttlQueue, CacheQueue<String> cacheQueue) {
+                                                 TtlQueue<String> ttlQueue, CacheQueue<String, String> cacheQueue) {
         return new CacheMetricsBinder(cacheMetrics, cacheMap, ttlQueue, cacheQueue);
     }
 
@@ -64,8 +65,11 @@ public class SystemConfig {
     }
 
     @Bean
-    public DistributedCacheImpl<String, String> distributedCache(IClusterService<String> clusterService) {
-        return new DistributedCacheImpl<>(cacheMap(), cacheQueue(), cacheMetrics(), clusterService);
+    public IDistributedCache<String, String> singleThreadedCacheCore(
+            @Value("${cache.name:core-worker-thread}") String workerThreadName,
+            IClusterService<String> clusterService
+    ) {
+        return new SingleThreadedCacheCore<>(workerThreadName, cacheQueue(), cacheMetrics(), clusterService);
     }
 
     @Bean
@@ -86,16 +90,17 @@ public class SystemConfig {
     @Bean
     public CacheCleanerTask<String, String> cacheCleanerTask(
             @Value("${cache.max-size:1000}") int maxCacheSize,
-            @Value("${cache.breathable-space:100}") int breathableSpace
+            @Value("${cache.breathable-space:100}") int breathableSpace,
+            IDistributedCache<String, String> singleThreadedCacheCore
     ) {
         int maximumSize = maxCacheSize - breathableSpace;
         return new CacheCleanerTask<>(
                 cacheQueue(),
                 ttlQueue(),
                 leastFrequentlyUsedStrategy(),
-                cacheMap(),
                 maximumSize,
-                cacheMetrics()
+                cacheMetrics(),
+                singleThreadedCacheCore
         );
     }
 

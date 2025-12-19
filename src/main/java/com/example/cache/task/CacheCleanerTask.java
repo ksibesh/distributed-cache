@@ -1,6 +1,6 @@
 package com.example.cache.task;
 
-import com.example.cache.core.domain.CacheEntry;
+import com.example.cache.core.IDistributedCache;
 import com.example.cache.core.domain.CacheOperation;
 import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.core.ds.TtlQueue;
@@ -11,29 +11,28 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class CacheCleanerTask<K, V> implements Runnable {
-    private final CacheQueue<K> cacheQueue;
+    private final CacheQueue<K, V> cacheQueue;
     private final TtlQueue<K> ttlQueue;
     private final IEvictionStrategy<K> evictionStrategy;
-    private final ConcurrentHashMap<K, CacheEntry<V>> cacheMap;
     private final int maximumSize;
     private final CacheMetrics cacheMetrics;
+    private final IDistributedCache<K, V> cacheCore;
 
     private volatile boolean running = true;
 
-    public CacheCleanerTask(CacheQueue<K> cacheQueue, TtlQueue<K> ttlQueue, IEvictionStrategy<K> evictionStrategy,
-                            ConcurrentHashMap<K, CacheEntry<V>> cacheMap, int maximumCacheSize, CacheMetrics cacheMetrics) {
+    public CacheCleanerTask(CacheQueue<K, V> cacheQueue, TtlQueue<K> ttlQueue, IEvictionStrategy<K> evictionStrategy,
+                            int maximumCacheSize, CacheMetrics cacheMetrics, IDistributedCache<K, V> cacheCore) {
 
         this.cacheQueue = cacheQueue;
         this.ttlQueue = ttlQueue;
         this.evictionStrategy = evictionStrategy;
-        this.cacheMap = cacheMap;
         this.maximumSize = maximumCacheSize;
         this.cacheMetrics = cacheMetrics;
+        this.cacheCore = cacheCore;
     }
 
     @Override
@@ -55,19 +54,19 @@ public class CacheCleanerTask<K, V> implements Runnable {
         this.running = false;
     }
 
-    private void dispatchOperation(CacheOperation<K> operation) {
+    private void dispatchOperation(CacheOperation<K, V> operation) {
         switch (operation.getType()) {
             case PUT:
                 evictionStrategy.onPut(operation.getKey());
                 log.debug("[CacheCleanerTask.Dispatch.PUT] [key={}]", operation.getKey());
-                ttlQueue.add(cacheMap.get(operation.getKey()).getExpirationTime(), operation.getKey());
+                ttlQueue.add(operation.getEntry().getExpirationTime(), operation.getKey());
                 break;
-            case ACCESS:
-                evictionStrategy.onAccess(operation.getKey());
+            case GET:
+                evictionStrategy.onGet(operation.getKey());
                 log.debug("[CacheCleanerTask.Dispatch.ACCESS] [key={}]", operation.getKey());
                 break;
-            case REMOVE:
-                evictionStrategy.onRemove(operation.getKey());
+            case DELETE:
+                evictionStrategy.onDelete(operation.getKey());
                 log.debug("[CacheCleanerTask.Dispatch.REMOVE] [key={}]", operation.getKey());
                 break;
         }
@@ -76,34 +75,27 @@ public class CacheCleanerTask<K, V> implements Runnable {
     private void cleanupExpiredKeys() {
         long currentTimeInSec = SystemUtil.getCurrentTimeInSec();
         while (!ttlQueue.isEmpty() && ttlQueue.peek().filter(ttl -> ttl <= currentTimeInSec).isPresent()) {
-            ttlQueue.poll().stream().flatMap(Set::stream)
-                    .filter(cacheMap::containsKey).forEach(key -> {
-                        cacheMap.remove(key);
-                        evictionStrategy.onRemove(key);
-                        cacheMetrics.incrementTtlExpirations();
-                        log.debug("[CacheCleanerTask.Cleanup.TTL.ExpiredKeys] [key={}]", key);
-                    });
+            ttlQueue.poll().stream().flatMap(Set::stream).forEach(key -> {
+                cacheCore.submitDelete(key);
+                evictionStrategy.onDelete(key);
+                cacheMetrics.incrementTtlExpirations();
+                log.debug("[CacheCleanerTask.Cleanup.TTL.ExpiredKeys] [key={}]", key);
+            });
         }
     }
 
     private void enforceCapacityLimit() {
-        while (cacheMap.size() > maximumSize) {
-
+        while (cacheCore.size() > maximumSize) {
             Optional<K> keyToEvict = evictionStrategy.evict();
-
             if (keyToEvict.isPresent()) {
-
                 K key = keyToEvict.get();
-                cacheMap.remove(key);
-                evictionStrategy.onRemove(key);
+                cacheCore.submitDelete(key);
+                evictionStrategy.onDelete(key);
                 cacheMetrics.incrementEvictions();
                 log.debug("[CacheCleanerTask.Eviction] [key={}] [strategy={}]", key, evictionStrategy.getClass().getName());
-
             } else {
-
                 log.error("[CacheCleanerTask.Eviction.Error] [strategy={}]", evictionStrategy.getClass().getName());
                 break;
-
             }
         }
     }

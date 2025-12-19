@@ -22,9 +22,9 @@ public class LeastRecentUsedStrategyTest {
         lruEvictionStrategy.onPut(keys[1]);
         lruEvictionStrategy.onPut(keys[2]);
 
-        lruEvictionStrategy.onAccess(keys[0]);
-        lruEvictionStrategy.onAccess(keys[2]);
-        lruEvictionStrategy.onAccess(keys[0]);
+        lruEvictionStrategy.onGet(keys[0]);
+        lruEvictionStrategy.onGet(keys[2]);
+        lruEvictionStrategy.onGet(keys[0]);
 
         Optional<String> firstEvictedItem = lruEvictionStrategy.evict();
         Assertions.assertTrue(firstEvictedItem.isPresent());
@@ -41,46 +41,46 @@ public class LeastRecentUsedStrategyTest {
         lruEvictionStrategy.onPut(keys[4]);
         // flow: (LRU) 0 -> 1 -> 2 -> 3 -> 4 (MRU)
 
-        lruEvictionStrategy.onAccess(keys[0]);  // flow: (LRU) 1 -> 2 -> 3 -> 4 -> 0 (MRU)
-        lruEvictionStrategy.onAccess(keys[4]);  // flow: (LRU) 1 -> 2 -> 3 -> 0 -> 4 (MRU)
-        lruEvictionStrategy.onAccess(keys[2]);  // flow: (LRU) 1 -> 3 -> 0 -> 4 -> 2 (MRU)
+        lruEvictionStrategy.onGet(keys[0]);  // flow: (LRU) 1 -> 2 -> 3 -> 4 -> 0 (MRU)
+        lruEvictionStrategy.onGet(keys[4]);  // flow: (LRU) 1 -> 2 -> 3 -> 0 -> 4 (MRU)
+        lruEvictionStrategy.onGet(keys[2]);  // flow: (LRU) 1 -> 3 -> 0 -> 4 -> 2 (MRU)
 
         {
             Optional<String> evictedItem = lruEvictionStrategy.evict();    // flow: (LRU) [1] 3 -> 0 -> 4 -> 2 (MRU)
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[1], evictedItem.get());
-            lruEvictionStrategy.onRemove(evictedItem.get());
+            lruEvictionStrategy.onDelete(evictedItem.get());
         }
 
-        lruEvictionStrategy.onAccess(keys[3]);  // flow: (LRU) 0 -> 4 -> 2 -> 3 (MRU)
-        lruEvictionStrategy.onAccess(keys[0]);  // flow: (LRU) 4 -> 2 -> 3 -> 0 (MRU)
+        lruEvictionStrategy.onGet(keys[3]);  // flow: (LRU) 0 -> 4 -> 2 -> 3 (MRU)
+        lruEvictionStrategy.onGet(keys[0]);  // flow: (LRU) 4 -> 2 -> 3 -> 0 (MRU)
 
         {
             Optional<String> evictedItem = lruEvictionStrategy.evict();    // flow: (LRU) [4] 2 -> 3 -> 0 (MRU)
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[4], evictedItem.get());
-            lruEvictionStrategy.onRemove(evictedItem.get());
+            lruEvictionStrategy.onDelete(evictedItem.get());
         }
 
         {
             Optional<String> evictedItem = lruEvictionStrategy.evict();    // flow: (LRU) [2] 3 -> 0 (MRU)
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[2], evictedItem.get());
-            lruEvictionStrategy.onRemove(evictedItem.get());
+            lruEvictionStrategy.onDelete(evictedItem.get());
         }
 
         {
             Optional<String> evictedItem = lruEvictionStrategy.evict();    // flow: (LRU) [3] 0 (MRU)
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[3], evictedItem.get());
-            lruEvictionStrategy.onRemove(evictedItem.get());
+            lruEvictionStrategy.onDelete(evictedItem.get());
         }
 
         {
             Optional<String> evictedItem = lruEvictionStrategy.evict();    // flow: (LRU) [0] (MRU)
             Assertions.assertTrue(evictedItem.isPresent());
             Assertions.assertEquals(keys[0], evictedItem.get());
-            lruEvictionStrategy.onRemove(evictedItem.get());
+            lruEvictionStrategy.onDelete(evictedItem.get());
         }
 
         {

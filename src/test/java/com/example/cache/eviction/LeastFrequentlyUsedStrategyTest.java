@@ -38,25 +38,25 @@ public class LeastFrequentlyUsedStrategyTest {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[0], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());
+            lfuStrategy.onDelete(evictionKey.get());
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[1], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());
+            lfuStrategy.onDelete(evictionKey.get());
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[2], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());
+            lfuStrategy.onDelete(evictionKey.get());
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[3], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());
+            lfuStrategy.onDelete(evictionKey.get());
         }
     }
 
@@ -65,26 +65,26 @@ public class LeastFrequentlyUsedStrategyTest {
         String[] keys = new String[]{"test_key_0", "test_key_1", "test_key_2", "test_key_3"};
         lfuStrategy.onPut(keys[0]); // 0(1)
         lfuStrategy.onPut(keys[1]); // 0(1) -> 1(1)
-        lfuStrategy.onAccess(keys[1]);  // 0(1) -> 1(2)
+        lfuStrategy.onGet(keys[1]);  // 0(1) -> 1(2)
         lfuStrategy.onPut(keys[2]); // 0(1) -> 2(1) -> 1(2)
-        lfuStrategy.onAccess(keys[0]);  // 2(1) -> 1(2) -> 0(2)
-        lfuStrategy.onAccess(keys[1]);  // 2(1) -> 0(2) -> 1(3)
-        lfuStrategy.onAccess(keys[0]);  // 2(1) -> 1(3) -> 0(3)
+        lfuStrategy.onGet(keys[0]);  // 2(1) -> 1(2) -> 0(2)
+        lfuStrategy.onGet(keys[1]);  // 2(1) -> 0(2) -> 1(3)
+        lfuStrategy.onGet(keys[0]);  // 2(1) -> 1(3) -> 0(3)
         lfuStrategy.onPut(keys[3]); // 2(1) -> 3(1) -> 1(3) -> 0(3)
-        lfuStrategy.onAccess(keys[0]);  // 2(1) -> 3(1) -> 1(3) -> 0(4)
-        lfuStrategy.onAccess(keys[3]);  // 2(1) -> 3(2) -> 1(3) -> 0(4)
+        lfuStrategy.onGet(keys[0]);  // 2(1) -> 3(1) -> 1(3) -> 0(4)
+        lfuStrategy.onGet(keys[3]);  // 2(1) -> 3(2) -> 1(3) -> 0(4)
 
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[2], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // 3(2) -> 1(3) -> 0(4)
+            lfuStrategy.onDelete(evictionKey.get());    // 3(2) -> 1(3) -> 0(4)
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[3], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // 1(3) -> 0(4)
+            lfuStrategy.onDelete(evictionKey.get());    // 1(3) -> 0(4)
         }
 
         lfuStrategy.onPut(keys[2]); // 2(1) -> 1(3) -> 0(4)
@@ -93,7 +93,7 @@ public class LeastFrequentlyUsedStrategyTest {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[2], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // 3(1) -> 1(3) -> 0(4)
+            lfuStrategy.onDelete(evictionKey.get());    // 3(1) -> 1(3) -> 0(4)
         }
 
         lfuStrategy.onPut(keys[2]); // 3(1) -> 2(1) -> 1(3) -> 0(4)
@@ -103,25 +103,25 @@ public class LeastFrequentlyUsedStrategyTest {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[3], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // 1(3) -> 2(3) -> 0(4)
+            lfuStrategy.onDelete(evictionKey.get());    // 1(3) -> 2(3) -> 0(4)
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[1], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // 2(3) -> 0(4)
+            lfuStrategy.onDelete(evictionKey.get());    // 2(3) -> 0(4)
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[2], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // 0(4)
+            lfuStrategy.onDelete(evictionKey.get());    // 0(4)
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();
             Assertions.assertTrue(evictionKey.isPresent());
             Assertions.assertEquals(keys[0], evictionKey.get());
-            lfuStrategy.onRemove(evictionKey.get());    // <empty>
+            lfuStrategy.onDelete(evictionKey.get());    // <empty>
         }
         {
             Optional<String> evictionKey = lfuStrategy.evict();

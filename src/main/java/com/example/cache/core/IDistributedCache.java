@@ -1,11 +1,15 @@
 package com.example.cache.core;
 
+import java.util.concurrent.CompletableFuture;
+
 public interface IDistributedCache<K, V> {
 
-    void put(K key, V value, long ttlSeconds);
+    CompletableFuture<Void> submitPut(K key, V value, long ttlSeconds);
 
-    V get(K key);
+    CompletableFuture<V> submitGet(K key);
 
-    void delete(K key);
+    CompletableFuture<Void> submitDelete(K key);
+
+    int size();
 
 }
