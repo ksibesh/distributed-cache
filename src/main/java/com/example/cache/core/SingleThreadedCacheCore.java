@@ -1,6 +1,7 @@
 package com.example.cache.core;
 
 import com.example.cache.cluster.IClusterService;
+import com.example.cache.cluster.grpc.CacheGrpcClient;
 import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.domain.CacheOperation;
 import com.example.cache.core.domain.CacheOperationType;
@@ -16,21 +17,21 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 
 @Slf4j
-public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
-    // Intentionally used specific implementation type over here, I don't want this to be overridden using DI
-    private final CacheQueue<K, V> queue;
+public class SingleThreadedCacheCore implements IDistributedCache {
+    private final CacheQueue queue;
     private final CacheMetrics cacheMetrics;
-    private final IClusterService<K> clusterService;
+    private final IClusterService clusterService;
+    private final CacheGrpcClient grpcClient;
 
-    private final Map<K, CacheEntry<V>> storage = new HashMap<>();
-    // TODO: Check later of we can replace CacheTask from CacheOperation and make it also DI, will be efficient for metrics
-    private final BlockingQueue<CacheTask<K, V>> taskQueue = new LinkedBlockingQueue<>();
+    private final Map<String, CacheEntry> storage = new HashMap<>();
+    private final BlockingQueue<CacheTask> taskQueue = new LinkedBlockingQueue<>();
 
-    public SingleThreadedCacheCore(String workerThreadName, CacheQueue<K, V> queue, CacheMetrics cacheMetrics,
-                                   IClusterService<K> clusterService) {
+    public SingleThreadedCacheCore(String workerThreadName, CacheQueue queue, CacheMetrics cacheMetrics,
+                                   IClusterService clusterService, CacheGrpcClient grpcClient) {
         this.queue = queue;
         this.cacheMetrics = cacheMetrics;
         this.clusterService = clusterService;
+        this.grpcClient = grpcClient;
 
         Thread worker = new Thread(this::runEventLoop, workerThreadName);
         worker.setDaemon(true);
@@ -41,7 +42,7 @@ public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
         log.info("Single-threaded cache core worker started");
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                CacheTask<K, V> task = taskQueue.take();
+                CacheTask task = taskQueue.take();
                 executeTask(task);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -52,7 +53,7 @@ public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
         }
     }
 
-    private boolean isNotOwner(K key) {
+    private boolean isNotOwner(String key) {
         String ownerId = clusterService.findOwnerNode(key);
         boolean isOwner = ownerId.equals(clusterService.getLocalNodeId());
 
@@ -63,36 +64,47 @@ public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
         return !isOwner;
     }
 
-    private void executeTask(CacheTask<K, V> task) {
+    private void executeTask(CacheTask task) {
         if (isNotOwner(task.key)) {
-            // TODO: Implement the proxy request forward to owner node, to be implemented later
-            task.future.complete(null);
+            handleForwarding(task);
             return;
         }
 
         long currentTimeInSec = SystemUtil.getCurrentTimeInSec();
         switch (task.type) {
-            case PUT:
-                handlePut(task, currentTimeInSec);
-                break;
-            case GET:
-                handleGet(task, currentTimeInSec);
-                break;
-            case DELETE:
-                handleDelete(task);
-                break;
+            case PUT -> handlePut(task, currentTimeInSec);
+            case GET -> handleGet(task, currentTimeInSec);
+            case DELETE -> handleDelete(task);
         }
     }
 
-    private void handleDelete(CacheTask<K, V> task) {
+    private void handleForwarding(CacheTask task) {
+        String ownerId = clusterService.findOwnerNode(task.key);
+        String ownerNodeAddress = clusterService.getAddressForNodeId(ownerId);
+        if (ownerNodeAddress == null || ownerNodeAddress.isEmpty()) {
+            log.error("[Cluster.Routing:AddressNotFound] [msg=No address found for owner node] [Owner Node={}] [Key={}]",
+                    ownerId, task.key);
+            task.future.completeExceptionally(new RuntimeException("Address not found for owner node=" + ownerId));
+        }
+
+        log.debug("[Cluster.Routing:Forwarding] [msg=Forwarding cache operation] [Owner Node={}] [Target Address={}] [Key={}]",
+                ownerId, ownerNodeAddress, task.key);
+        switch (task.type) {
+            case PUT -> grpcClient.forwardPut("", task.key, task.value(), task.ttl, task.future);
+            case GET -> grpcClient.forwardGet("", task.key, task.future);
+            case DELETE -> grpcClient.forwardDelete("", task.key, task.future);
+        }
+    }
+
+    private void handleDelete(CacheTask task) {
         storage.remove(task.key);
         cacheMetrics.incrementRemoves();
         queue.submit(CacheOperation.of(CacheOperationType.DELETE, task.key));
         task.future.complete(null);
     }
 
-    private void handleGet(CacheTask<K, V> task, long currentTimeInSec) {
-        CacheEntry<V> entry = storage.get(task.key);
+    private void handleGet(CacheTask task, long currentTimeInSec) {
+        CacheEntry entry = storage.get(task.key);
         if (entry == null || entry.isExpired(currentTimeInSec)) {
             if (entry != null) {
                 storage.remove(task.key);
@@ -108,8 +120,8 @@ public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
         }
     }
 
-    private void handlePut(CacheTask<K, V> task, long currentTimeInSec) {
-        CacheEntry<V> newEntry = CacheEntry.<V>builder()
+    private void handlePut(CacheTask task, long currentTimeInSec) {
+        CacheEntry newEntry = CacheEntry.builder()
                 .value(task.value)
                 .expirationTime(currentTimeInSec + task.ttl)
                 .creationTime(currentTimeInSec)
@@ -121,23 +133,23 @@ public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
     }
 
     @Override
-    public CompletableFuture<V> submitGet(K key) {
-        CompletableFuture<V> future = new CompletableFuture<>();
-        taskQueue.add(new CacheTask<>(CacheOperationType.GET, key, null, 0, future));
+    public CompletableFuture<String> submitGet(String key) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        taskQueue.add(new CacheTask(CacheOperationType.GET, key, null, 0, future));
         return future;
     }
 
     @Override
-    public CompletableFuture<Void> submitPut(K key, V value, long ttlInSec) {
-        CompletableFuture<V> future = new CompletableFuture<>();
-        taskQueue.add(new CacheTask<>(CacheOperationType.PUT, key, value, ttlInSec, future));
+    public CompletableFuture<Void> submitPut(String key, String value, long ttlInSec) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        taskQueue.add(new CacheTask(CacheOperationType.PUT, key, value, ttlInSec, future));
         return future.thenApply(v -> null);
     }
 
     @Override
-    public CompletableFuture<Void> submitDelete(K key) {
-        CompletableFuture<V> future = new CompletableFuture<>();
-        taskQueue.add(new CacheTask<>(CacheOperationType.DELETE, key, null, 0, future));
+    public CompletableFuture<Void> submitDelete(String key) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        taskQueue.add(new CacheTask(CacheOperationType.DELETE, key, null, 0, future));
         return future.thenApply(v -> null);
     }
 
@@ -146,12 +158,12 @@ public class SingleThreadedCacheCore<K, V> implements IDistributedCache<K, V> {
         return storage.size();
     }
 
-    private record CacheTask<K, V>(
+    private record CacheTask(
             CacheOperationType type,
-            K key,
-            V value,
+            String key,
+            String value,
             long ttl,
-            CompletableFuture<V> future
+            CompletableFuture<String> future
     ) {
     }
 }

@@ -23,11 +23,11 @@ import static com.example.cache.util.SystemUtil.DEFAULT_ERROR_CODE;
 @RequestMapping("/cache")
 public class CacheController {
 
-    private final IDistributedCache<String, String> cacheCore;
+    private final IDistributedCache cacheCore;
     private final long timeout;
 
     @Autowired
-    public CacheController(IDistributedCache<String, String> cacheCore) {
+    public CacheController(IDistributedCache cacheCore) {
         this.cacheCore = cacheCore;
         this.timeout = 500; // TODO: make this configurable
     }

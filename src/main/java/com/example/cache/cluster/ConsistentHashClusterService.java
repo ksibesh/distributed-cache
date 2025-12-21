@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This approach ensure minimal key movement when nodes are added or removed.
  */
 @Slf4j
-public class ConsistentHashClusterService<K> implements IClusterService<K> {
+public class ConsistentHashClusterService implements IClusterService {
 
     private final String localNodeId;
     private final int numberOfVirtualNode;
@@ -25,6 +26,9 @@ public class ConsistentHashClusterService<K> implements IClusterService<K> {
 
     // Set of active physical node IDs
     private final Set<String> activeNodes = ConcurrentHashMap.newKeySet();
+
+    // Map for holding the mapping of node ID to node address
+    private final Map<String, String> nodeAddressMap = new ConcurrentHashMap<>();
 
     // Cache the hash function for performance
     private final ThreadLocal<MessageDigest> md5 = ThreadLocal.withInitial(() -> {
@@ -48,13 +52,13 @@ public class ConsistentHashClusterService<K> implements IClusterService<K> {
     }
 
     @Override
-    public String findOwnerNode(K key) {
+    public String findOwnerNode(String key) {
         if (hashRing.isEmpty()) {
             // Fallback: If no node, assume local node
             return localNodeId;
         }
 
-        long keyHash = hash(key.toString());
+        long keyHash = hash(key);
         // Find the first node on the ring whose hash is greater than or equal to key's hash
         Long nodeHash = hashRing.ceilingKey(keyHash);
         // If no node is found (i.e. we are at the end of the ring), wrap around the first node
@@ -70,15 +74,31 @@ public class ConsistentHashClusterService<K> implements IClusterService<K> {
     }
 
     @Override
-    public void addNode(String nodeId) {
+    public String getAddressForNodeId(String nodeId) {
+        String address = nodeAddressMap.get(nodeId);
+        if (address == null || address.isEmpty()) {
+            log.warn("Address for node={} is empty", nodeId);
+        }
+        return address;
+    }
+
+    @Override
+    public void addNode(String nodeId, String nodeAddress) {
         if (activeNodes.add(nodeId)) {
             for (int i = 0; i < numberOfVirtualNode; i++) {
                 long hash = hash(nodeId + "-" + i);
                 hashRing.put(hash, nodeId);
             }
-            log.info("[ClusterService.ConsistentHashClusterService.AddNode] [NodeId={}] [Number of Virtual Nodes={}] [Total Nodes={}]",
-                    nodeId, numberOfVirtualNode, activeNodes.size());
+            nodeAddressMap.put(nodeId, nodeAddress);
+            log.info("[ClusterService.ConsistentHashClusterService.AddNode] [Node ID={}] [Node Address={}] " +
+                            "[Number of Virtual Nodes={}] [Total Nodes={}]", nodeId, nodeAddress, numberOfVirtualNode,
+                    activeNodes.size());
         }
+    }
+
+    @Override
+    public void addNode(String nodeId) {
+        addNode(nodeId, nodeId);
     }
 
     @Override

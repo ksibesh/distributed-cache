@@ -1,6 +1,5 @@
 package com.example.cache.metrics;
 
-import com.example.cache.core.domain.CacheEntry;
 import com.example.cache.core.ds.CacheQueue;
 import com.example.cache.core.ds.TtlQueue;
 import io.micrometer.core.instrument.FunctionCounter;
@@ -8,18 +7,13 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 public class CacheMetricsBinder implements MeterBinder {
     private final CacheMetrics cacheMetrics;
-    private final ConcurrentHashMap<?, CacheEntry<?>> cacheMap;
-    private final TtlQueue<?> ttlQueue;
-    private final CacheQueue<?, ?> cacheQueue;
+    private final TtlQueue ttlQueue;
+    private final CacheQueue cacheQueue;
 
-    public CacheMetricsBinder(CacheMetrics cacheMetrics, ConcurrentHashMap<?, CacheEntry<?>> cacheMap,
-                              TtlQueue<?> ttlQueue, CacheQueue<?, ?> cacheQueue) {
+    public CacheMetricsBinder(CacheMetrics cacheMetrics, TtlQueue ttlQueue, CacheQueue cacheQueue) {
         this.cacheMetrics = cacheMetrics;
-        this.cacheMap = cacheMap;
         this.ttlQueue = ttlQueue;
         this.cacheQueue = cacheQueue;
     }
@@ -64,9 +58,9 @@ public class CacheMetricsBinder implements MeterBinder {
 
         // --- Gauges (Real-time Values) ---
         // Current Cache Size
-        Gauge.builder(cacheName + ".size", cacheMap, ConcurrentHashMap::size)
+        /*Gauge.builder(cacheName + ".size", cacheMap, ConcurrentHashMap::size)
                 .description("The current number of element in the cache map")
-                .register(registry);
+                .register(registry);*/
 
         // TTL Queue Size
         Gauge.builder(cacheName + ".ttl.queue.size", ttlQueue, TtlQueue::size)

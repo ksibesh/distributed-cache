@@ -21,13 +21,13 @@ import static org.mockito.Mockito.*;
 
 public class CacheCleanerTaskTest {
 
-    private CacheQueue<String, String> cacheQueue;
-    private TtlQueue<String> ttlQueue;
+    private CacheQueue cacheQueue;
+    private TtlQueue ttlQueue;
     private IEvictionStrategy<String> evictionStrategy;
-    private IDistributedCache<String, String> cacheCore;
+    private IDistributedCache cacheCore;
     private CacheMetrics cacheMetrics;
 
-    private CacheCleanerTask<String, String> cacheCleanerTask;
+    private CacheCleanerTask cacheCleanerTask;
 
     private final String testKey = "testKey";
     private final int maxCacheSize = 10;
@@ -35,16 +35,16 @@ public class CacheCleanerTaskTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
-        cacheQueue = (CacheQueue<String, String>) mock(CacheQueue.class);
-        ttlQueue = (TtlQueue<String>) mock(TtlQueue.class);
+        cacheQueue = mock(CacheQueue.class);
+        ttlQueue = mock(TtlQueue.class);
         evictionStrategy = (IEvictionStrategy<String>) mock(IEvictionStrategy.class);
         cacheMetrics = mock(CacheMetrics.class);
-        cacheCore = (IDistributedCache<String, String>) mock(IDistributedCache.class);
+        cacheCore = mock(IDistributedCache.class);
 
-        cacheCleanerTask = new CacheCleanerTask<>(cacheQueue, ttlQueue, evictionStrategy, maxCacheSize, cacheMetrics, cacheCore);
+        cacheCleanerTask = new CacheCleanerTask(cacheQueue, ttlQueue, evictionStrategy, maxCacheSize, cacheMetrics, cacheCore);
     }
 
-    private void runTaskCycle(Optional<CacheOperation<String, String>> operation) {
+    private void runTaskCycle(Optional<CacheOperation> operation) {
         when(cacheQueue.poll(anyLong(), any(TimeUnit.class)))
                 .thenReturn(operation)
                 .thenAnswer(invocation -> {
@@ -57,10 +57,10 @@ public class CacheCleanerTaskTest {
     @Test
     public void testDispatchOperationForPut() {
         long expirationTime = SystemUtil.getCurrentTimeInSec() + 60;
-        CacheEntry<String> entry = CacheEntry.<String>builder()
+        CacheEntry entry = CacheEntry.builder()
                 .expirationTime(expirationTime)
                 .build();
-        CacheOperation<String, String> putOperation = CacheOperation.of(CacheOperationType.PUT, testKey, entry);
+        CacheOperation putOperation = CacheOperation.of(CacheOperationType.PUT, testKey, entry);
 
         runTaskCycle(Optional.of(putOperation));
 
@@ -73,7 +73,7 @@ public class CacheCleanerTaskTest {
 
     @Test
     public void testDispatchOperationForAccess() {
-        CacheOperation<String, String> accessOperation = CacheOperation.of(CacheOperationType.GET, testKey);
+        CacheOperation accessOperation = CacheOperation.of(CacheOperationType.GET, testKey);
 
         runTaskCycle(Optional.of(accessOperation));
 
@@ -85,7 +85,7 @@ public class CacheCleanerTaskTest {
 
     @Test
     public void testDispatchOperationForRemove() {
-        CacheOperation<String, String> removeOperation = CacheOperation.of(CacheOperationType.DELETE, testKey);
+        CacheOperation removeOperation = CacheOperation.of(CacheOperationType.DELETE, testKey);
 
         runTaskCycle(Optional.of(removeOperation));
 

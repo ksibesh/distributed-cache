@@ -12,12 +12,12 @@ import java.util.concurrent.TimeUnit;
 
 public class CacheQueueTest {
 
-    private CacheQueue<String, String> cacheQueue;
+    private CacheQueue cacheQueue;
 
     @BeforeEach
     public void setup() {
         CacheMetrics cacheMetrics = new CacheMetrics();
-        cacheQueue = new CacheQueue<String, String>(100, cacheMetrics);
+        cacheQueue = new CacheQueue(100, cacheMetrics);
     }
 
     @Test
@@ -47,7 +47,7 @@ public class CacheQueueTest {
 
         {
             Assertions.assertEquals(3, cacheQueue.size());
-            Optional<CacheOperation<String, String>> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
+            Optional<CacheOperation> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
             Assertions.assertTrue(operation.isPresent());
             Assertions.assertEquals(CacheOperationType.PUT, operation.get().getType());
             Assertions.assertEquals(keys[0], operation.get().getKey());
@@ -55,7 +55,7 @@ public class CacheQueueTest {
         }
         {
             Assertions.assertEquals(2, cacheQueue.size());
-            Optional<CacheOperation<String, String>> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
+            Optional<CacheOperation> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
             Assertions.assertTrue(operation.isPresent());
             Assertions.assertEquals(CacheOperationType.GET, operation.get().getType());
             Assertions.assertEquals(keys[1], operation.get().getKey());
@@ -63,7 +63,7 @@ public class CacheQueueTest {
         }
         {
             Assertions.assertEquals(1, cacheQueue.size());
-            Optional<CacheOperation<String, String>> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
+            Optional<CacheOperation> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
             Assertions.assertTrue(operation.isPresent());
             Assertions.assertEquals(CacheOperationType.DELETE, operation.get().getType());
             Assertions.assertEquals(keys[2], operation.get().getKey());
@@ -78,7 +78,7 @@ public class CacheQueueTest {
 
         {
             Assertions.assertEquals(1, cacheQueue.size());
-            Optional<CacheOperation<String, String>> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
+            Optional<CacheOperation> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
             Assertions.assertTrue(operation.isPresent());
             Assertions.assertEquals(CacheOperationType.PUT, operation.get().getType());
             Assertions.assertEquals(key, operation.get().getKey());
@@ -86,7 +86,7 @@ public class CacheQueueTest {
         }
         {
             Assertions.assertEquals(0, cacheQueue.size());
-            Optional<CacheOperation<String, String>> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
+            Optional<CacheOperation> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
             Assertions.assertTrue(operation.isEmpty());
         }
     }
@@ -94,7 +94,7 @@ public class CacheQueueTest {
     @Test
     public void testQueuePollForEmptyQueue() {
         Assertions.assertEquals(0, cacheQueue.size());
-        Optional<CacheOperation<String, String>> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
+        Optional<CacheOperation> operation = cacheQueue.poll(100, TimeUnit.MILLISECONDS);
         Assertions.assertTrue(operation.isEmpty());
     }
 }

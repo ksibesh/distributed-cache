@@ -9,16 +9,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 @Slf4j
-public class TtlQueue<K> {
-    private final ConcurrentSkipListMap<Long, Set<K>> expirationMap;
-    private final ConcurrentHashMap<K, Long> reverseIndex;
+public class TtlQueue {
+    private final ConcurrentSkipListMap<Long, Set<String>> expirationMap;
+    private final ConcurrentHashMap<String, Long> reverseIndex;
 
     public TtlQueue() {
         this.expirationMap = new ConcurrentSkipListMap<>();
         this.reverseIndex = new ConcurrentHashMap<>();
     }
 
-    public void add(long ttlInSec, K key) {
+    public void add(long ttlInSec, String key) {
         Long oldTtl = reverseIndex.get(key);
         // If key exist for another ttl, then it need to cleaned up and new ttl should be inserted.
         if (oldTtl != null) {
@@ -34,8 +34,8 @@ public class TtlQueue<K> {
     /**
      * Helper method to remove the key from specific ttl bucket, and clear the bucket if it gets empty
      */
-    private void removeInternal(K key, Long ttl) {
-        Set<K> keys = expirationMap.get(ttl);
+    private void removeInternal(String key, Long ttl) {
+        Set<String> keys = expirationMap.get(ttl);
         if (keys != null) {
             keys.remove(key);
             if (keys.isEmpty()) {
@@ -54,9 +54,9 @@ public class TtlQueue<K> {
         return peekValue;
     }
 
-    public Optional<Set<K>> poll() {
+    public Optional<Set<String>> poll() {
         Long firstTtl = expirationMap.firstKey();
-        Set<K> keys = expirationMap.get(firstTtl);
+        Set<String> keys = expirationMap.get(firstTtl);
 
         expirationMap.remove(firstTtl, keys);
         if (keys == null || keys.isEmpty()) {

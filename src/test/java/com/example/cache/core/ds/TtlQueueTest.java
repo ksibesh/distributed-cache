@@ -10,11 +10,11 @@ import java.util.Set;
 
 public class TtlQueueTest {
 
-    private TtlQueue<String> ttlQueue;
+    private TtlQueue ttlQueue;
 
     @BeforeEach
     public void setup() {
-        ttlQueue = new TtlQueue<>();
+        ttlQueue = new TtlQueue();
     }
 
     @Test

@@ -15,19 +15,19 @@ public class ConsistentHashClusterServiceTest {
     private final int VIRTUAL_NODE_COUNT = 2;
 
     // intentionally avoided @BeforeEach, as we are changing the state of clusterService in each test.
-    public ConsistentHashClusterService<String> setup() {
-        return new ConsistentHashClusterService<>(LOCAL_NODE_ID, VIRTUAL_NODE_COUNT);
+    public ConsistentHashClusterService setup() {
+        return new ConsistentHashClusterService(LOCAL_NODE_ID, VIRTUAL_NODE_COUNT);
     }
 
     @Test
     public void testGetLocalNodeId() {
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
         assertEquals(LOCAL_NODE_ID, clusterService.getLocalNodeId());
     }
 
     @Test
     public void testGetAllNodeIdWithNoNode() {
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
 
         Set<String> allNodes = clusterService.getAllNodeIds();
         assertNotNull(allNodes);
@@ -36,7 +36,7 @@ public class ConsistentHashClusterServiceTest {
 
     @Test
     public void testGetAllNodesWithMultipleNodes() {
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
         clusterService.addNode("node-1");
         clusterService.addNode("node-2");
         clusterService.addNode("node-3");
@@ -48,7 +48,7 @@ public class ConsistentHashClusterServiceTest {
 
     @Test
     public void testAddNode() {
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
         {
             Set<String> allNodes = clusterService.getAllNodeIds();
             assertNotNull(allNodes);
@@ -67,7 +67,7 @@ public class ConsistentHashClusterServiceTest {
     public void testRemoveNode() {
         String[] nodeIds = new String[]{"node-1", "node-2", "node-3"};
 
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
         clusterService.addNode(nodeIds[0]);
         clusterService.addNode(nodeIds[1]);
         clusterService.addNode(nodeIds[2]);
@@ -85,7 +85,7 @@ public class ConsistentHashClusterServiceTest {
 
     @Test
     public void testClusterReadyForEmptyRing() {
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
 
         assertFalse(clusterService.isClusterReady());
     }
@@ -94,7 +94,7 @@ public class ConsistentHashClusterServiceTest {
     public void testClusterReadyForRingWithItems() {
         String[] nodeIds = new String[]{"node-1", "node-2", "node-3"};
 
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
         clusterService.addNode(nodeIds[0]);
         clusterService.addNode(nodeIds[1]);
         clusterService.addNode(nodeIds[2]);
@@ -104,7 +104,7 @@ public class ConsistentHashClusterServiceTest {
 
     @Test
     public void testFindOwnerNodeAndDistribution() {
-        ConsistentHashClusterService<String> clusterService = setup();
+        ConsistentHashClusterService clusterService = setup();
         String nodeA = "node-A";
         String nodeB = "node-B";
         String nodeC = "node-C";

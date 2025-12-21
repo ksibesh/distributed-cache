@@ -14,18 +14,18 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-public class CacheCleanerTask<K, V> implements Runnable {
-    private final CacheQueue<K, V> cacheQueue;
-    private final TtlQueue<K> ttlQueue;
-    private final IEvictionStrategy<K> evictionStrategy;
+public class CacheCleanerTask implements Runnable {
+    private final CacheQueue cacheQueue;
+    private final TtlQueue ttlQueue;
+    private final IEvictionStrategy<String> evictionStrategy;
     private final int maximumSize;
     private final CacheMetrics cacheMetrics;
-    private final IDistributedCache<K, V> cacheCore;
+    private final IDistributedCache cacheCore;
 
     private volatile boolean running = true;
 
-    public CacheCleanerTask(CacheQueue<K, V> cacheQueue, TtlQueue<K> ttlQueue, IEvictionStrategy<K> evictionStrategy,
-                            int maximumCacheSize, CacheMetrics cacheMetrics, IDistributedCache<K, V> cacheCore) {
+    public CacheCleanerTask(CacheQueue cacheQueue, TtlQueue ttlQueue, IEvictionStrategy<String> evictionStrategy,
+                            int maximumCacheSize, CacheMetrics cacheMetrics, IDistributedCache cacheCore) {
 
         this.cacheQueue = cacheQueue;
         this.ttlQueue = ttlQueue;
@@ -54,7 +54,7 @@ public class CacheCleanerTask<K, V> implements Runnable {
         this.running = false;
     }
 
-    private void dispatchOperation(CacheOperation<K, V> operation) {
+    private void dispatchOperation(CacheOperation operation) {
         switch (operation.getType()) {
             case PUT:
                 evictionStrategy.onPut(operation.getKey());
@@ -86,9 +86,9 @@ public class CacheCleanerTask<K, V> implements Runnable {
 
     private void enforceCapacityLimit() {
         while (cacheCore.size() > maximumSize) {
-            Optional<K> keyToEvict = evictionStrategy.evict();
+            Optional<String> keyToEvict = evictionStrategy.evict();
             if (keyToEvict.isPresent()) {
-                K key = keyToEvict.get();
+                String key = keyToEvict.get();
                 cacheCore.submitDelete(key);
                 evictionStrategy.onDelete(key);
                 cacheMetrics.incrementEvictions();

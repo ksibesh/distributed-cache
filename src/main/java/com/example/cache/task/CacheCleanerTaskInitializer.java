@@ -8,12 +8,12 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class CacheCleanerTaskInitializer {
-    private final CacheCleanerTask<?, ?> cacheCleanerTask;
+    private final CacheCleanerTask cacheCleanerTask;
     private final int cleanerThreadPool;
 
     private ExecutorService cacheCleanerExecutor;
 
-    public CacheCleanerTaskInitializer(CacheCleanerTask<?, ?> cacheCleanerTask, int cleanerThreadPool) {
+    public CacheCleanerTaskInitializer(CacheCleanerTask cacheCleanerTask, int cleanerThreadPool) {
         this.cacheCleanerTask = cacheCleanerTask;
         this.cleanerThreadPool = cleanerThreadPool;
     }

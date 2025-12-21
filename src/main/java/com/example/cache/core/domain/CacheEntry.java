@@ -7,9 +7,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Builder
 @Getter
-public class CacheEntry<V> {
+public class CacheEntry {
 
-    final V value;
+    final String value;
     final long creationTime;
     final long expirationTime;
 

@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 public class CacheControllerTest {
     private MockMvc mockMvc;
-    private IDistributedCache<String, String> cacheCore;
+    private IDistributedCache cacheCore;
     private ObjectMapper objectMapper;
 
     private final String CACHE_ENDPOINT = "/cache";
@@ -33,10 +33,9 @@ public class CacheControllerTest {
     private final long TEST_TTL = 3600;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     public void setup() {
         objectMapper = new ObjectMapper();
-        cacheCore = (IDistributedCache<String, String>) mock(IDistributedCache.class);
+        cacheCore = mock(IDistributedCache.class);
 
         CacheController cacheController = new CacheController(cacheCore);
         mockMvc = MockMvcBuilders.standaloneSetup(cacheController)

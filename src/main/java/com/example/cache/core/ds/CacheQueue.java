@@ -10,8 +10,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-public class CacheQueue<K, V> {
-    private final BlockingQueue<CacheOperation<K, V>> queue;
+public class CacheQueue {
+    private final BlockingQueue<CacheOperation> queue;
     private final CacheMetrics cacheMetrics;
 
     public CacheQueue(int capacity, CacheMetrics cacheMetrics) {
@@ -26,7 +26,7 @@ public class CacheQueue<K, V> {
      * @param operation The operation payload
      * @return True if successful, False if queue is full (dropped operation).
      */
-    public boolean submit(CacheOperation<K, V> operation) {
+    public boolean submit(CacheOperation operation) {
         boolean submitResult = queue.offer(operation);
         if (!submitResult) {
             cacheMetrics.incrementDroppedOperations();
@@ -45,9 +45,9 @@ public class CacheQueue<K, V> {
      * @param unit    The time unit.
      * @return An Optional containing the operation, or empty if timeout occurred.
      */
-    public Optional<CacheOperation<K, V>> poll(long timeout, TimeUnit unit) {
+    public Optional<CacheOperation> poll(long timeout, TimeUnit unit) {
         try {
-            CacheOperation<K, V> operation = queue.poll(timeout, unit);
+            CacheOperation operation = queue.poll(timeout, unit);
             log.debug("[CacheQueue.Poll] [timeout={}, unit={}]", timeout, unit);
             return Optional.ofNullable(operation);
         } catch (InterruptedException e) {
